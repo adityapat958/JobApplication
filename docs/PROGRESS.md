@@ -152,3 +152,21 @@ PHASE 7: DONE
   - FINN location codes: only Oslo verified; other places are filtered locally by text.
   - Not tested on a real Mac (launchd/Keychain/`open -R` are unit-tested with mocks).
 PHASE 8: DONE
+
+## Phase 8 (re-run) — feat/release
+- Re-ran phase 8 on branch `feat/release` (the earlier pass used `release`). Every release item from §11 was
+  already present: README, docs/ARCHITECTURE.md, docs/ADDING_A_SOURCE.md, CHANGELOG.md, MIT LICENSE, .gitignore.
+- New `tests/test_release.py` (21 tests): release files present and non-empty; LICENSE is MIT and matches
+  pyproject; version agrees across pyproject, `jobapp.__version__`, `jobapp version` and CHANGELOG; README
+  covers the novice path (Install with Claude, manual install, /setup, Claude Desktop snippet, screenshot,
+  report-bug); every top-level CLI command is documented (README or CLAUDE.md); relative doc links resolve;
+  all 7 slash commands exist; .gitignore covers personal data; no .db/.env/.pdf/.docx/output/__pycache__ is
+  tracked; package data that the wheel force-includes exists.
+- Gap found and fixed: README did not mention `jobapp version` (added under "Something wrong?").
+- Acceptance: fresh clone → `uv sync` → `jobapp init` → `config validate` → pytest 208 passed, 3 deselected (live).
+  `uv build` wheel contains examples, prompt, dashboard HTML, migrations; wheel installed in a clean venv →
+  `init`, `version` (0.1.0), `doctor` all OK. `scripts/privacy_scan.sh` clean.
+- `stable` and local tag `v0.1.0` moved to the new main merge commit (neither had ever been pushed). Nothing pushed.
+- Open issues unchanged (see the first phase 8 section): BI portal login, Obsidian connector, JS-rendered JDs,
+  LinkedIn 10 jobs/page, FINN location codes beyond Oslo, no test on a real Mac.
+PHASE 8: DONE
