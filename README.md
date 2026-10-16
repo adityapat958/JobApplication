@@ -96,6 +96,7 @@ Tools: `find_jobs`, `list_jobs`, `job_details`, `build_resume`, `mark_job`, `imp
 ## Something wrong?
 `uv run jobapp doctor` explains each problem with a fix. `uv run jobapp report-bug` makes a zip of logs and
 diagnostics with your name, email, phone numbers and passwords removed — send that to the developer.
+`uv run jobapp version` shows which version you have (mention it when you ask for help).
 
 ## Being a good citizen
 JobApplication is a personal tool, not a crawler: it waits at least 2 seconds between requests to the same
