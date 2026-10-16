@@ -103,3 +103,33 @@ def apply_filters(job: Any, f: Any, now: datetime | None = None) -> tuple[bool, 
             return False, f"ad language '{lang}' not in: {', '.join(f.languages)}"
 
     return True, ""
+
+
+# ── title_score: how well a title matches filters.title_include (ranking tiebreak) ──────────
+# Entry-level words say little about the work itself; a title hit only by one of them ranks low.
+GENERIC_TERMS = {"graduate", "grad", "new grad", "trainee", "junior", "intern", "interns", "internship",
+                 "praktikant", "sommerjobb", "summer", "student", "nyutdannet", "entry level", "apprentice",
+                 "lærling", "werkstudent", "working student", "associate", "early career"}
+GENERIC_WEIGHT = 0.25
+
+
+def term_weight(term: str) -> float:
+    t = normalize(term).strip().strip("*").strip()
+    if not t:
+        return 0.0
+    if t in GENERIC_TERMS or any(t.startswith(g) for g in ("intern", "trainee", "graduate", "junior")) \
+            and len(t.split()) == 1:
+        return GENERIC_WEIGHT
+    words = t.split()
+    return round(len(words) + min(len(t.replace(" ", "")), 20) / 20, 3)
+
+
+def title_score(title: str | None, includes: list[str] | None) -> float:
+    """0 = no include term hit. Specific multi-word/longer terms score higher than generic ones
+    (graduate/trainee/junior/intern*); the best hit counts, other specific hits add a little."""
+    if not title or not includes:
+        return 0.0
+    ws = sorted((term_weight(t) for t in includes if has_term(title, t)), reverse=True)
+    if not ws:
+        return 0.0
+    return round(ws[0] + 0.1 * sum(w for w in ws[1:] if w > GENERIC_WEIGHT), 2)

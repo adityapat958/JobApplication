@@ -13,7 +13,7 @@ from .. import db, paths
 from ..log import get
 
 log = get("mcp")
-LIST_KEYS = ("id", "company", "title", "location", "source", "posted_at", "match_pct", "status", "url")
+LIST_KEYS = ("id", "company", "title", "location", "source", "posted_at", "match_pct", "title_score", "status", "url")
 
 _poll_state: dict[str, Any] = {"running": False, "started": None, "result": None, "error": None}
 _poll_lock = threading.Lock()
@@ -85,7 +85,7 @@ def list_jobs(status: str | None = None, min_match: float | None = None, search:
     """List saved jobs (best match first by default)."""
     conn = _conn()
     rows = db.list_jobs(conn, status=status, min_match=min_match, query=search, order=sort, limit=limit,
-                        only_hidden=show_hidden)
+                        only_hidden=show_hidden, title_include=config_mod.title_include())
     jobs = []
     for r in rows:
         j = {k: r.get(k) for k in LIST_KEYS}

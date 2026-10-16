@@ -39,7 +39,7 @@
    <option value="internship">internship</option><option value="parttime">part-time</option></select></label>
  <label>posted <select id="age"><option value="0">any time</option><option value="1">last 24h</option>
    <option value="3">last 3 days</option><option value="7">last week</option><option value="30">last 30 days</option></select></label>
- <label>sort <select id="sort"><option value="newest">newest first</option><option value="match">best match</option>
+ <label>sort <select id="sort"><option value="match">best match</option><option value="newest">newest first</option>
    <option value="newmatch">newest, then match</option><option value="company">company A–Z</option></select></label>
  <label>min match <b id="mv">0</b>% <input id="mm" type="range" min="0" max="100" value="0"></label>
  <span id="count" class="kw"></span>
@@ -58,7 +58,7 @@ const H={'X-JobApp':'1','Content-Type':'application/json'};
 const STATUSES=['new','interested','applied','interview','rejected','offer','ignored'];
 const FOLDER='{{FOLDER_LABEL}}';
 let JOBS=[], SORTS=null; const DAY=86400000;
-const PRESETS={newest:[['posted',-1],['match_pct',-1]],match:[['match_pct',-1],['posted',-1]],
+const PRESETS={newest:[['posted',-1],['match_pct',-1]],match:[['match_pct',-1],['title_score',-1],['posted',-1]],
   newmatch:[['day',-1],['match_pct',-1]],company:[['company',1],['posted',-1]]};
 function posted(j){return j.posted_at||j.first_seen_at||''}
 function ageDays(j){const t=Date.parse(posted(j));return isNaN(t)?9999:Math.floor((Date.now()-t)/DAY)}
@@ -66,13 +66,14 @@ function ageLabel(j){const d=ageDays(j);if(d>=9999)return '—';
   const c=d<=1?'#4c8':d<=7?'#9c6':d<=30?'#ca6':'#777';
   return `<span style="color:${c}">${d<=0?'today':d+'d ago'}</span>`}
 function val(j,k){if(k==='posted')return posted(j);if(k==='day')return posted(j).slice(0,10);
-  if(k==='match_pct')return j.match_pct==null?-1:j.match_pct;return (j[k]||'').toString().toLowerCase()}
+  if(k==='match_pct')return j.match_pct==null?-1:j.match_pct;
+  if(k==='title_score')return j.title_score||0;return (j[k]||'').toString().toLowerCase()}
 function cmp(a,b){for(const [k,d] of SORTS){const x=val(a,k),y=val(b,k);if(x<y)return -d;if(x>y)return d}return 0}
 const SAVE=['q','show','src','type','age','sort','mm'];
 function saveUI(){const o={};SAVE.forEach(i=>o[i]=document.getElementById(i).value);localStorage.setItem('jobapp-ui',JSON.stringify(o))}
 function restoreUI(){try{const o=JSON.parse(localStorage.getItem('jobapp-ui')||'{}');
   SAVE.forEach(i=>{if(o[i]!==undefined)document.getElementById(i).value=o[i]})}catch(e){}
-  SORTS=PRESETS[document.getElementById('sort').value]||PRESETS.newest}
+  SORTS=PRESETS[document.getElementById('sort').value]||PRESETS.match}
 function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function toast(html,ms=5000){const t=document.getElementById('toast');t.innerHTML=html;t.classList.add('on');
   clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),ms)}

@@ -151,10 +151,11 @@ def list_cmd(status: Optional[str] = typer.Option(None, "--status"),
     from . import db
     conn = _conn()
     rows = db.list_jobs(conn, status=status, min_match=min_match, only_hidden=hidden, query=search,
-                        order=sort, limit=limit)
+                        order=sort, limit=limit, title_include=config_mod.title_include())
     if as_json:
         print(json.dumps([{k: r[k] for k in ("id", "company", "title", "location", "source", "posted_at",
-                                              "match_pct", "status", "hidden_reason", "url")} for r in rows],
+                                              "match_pct", "title_score", "status", "hidden_reason", "url")}
+                          for r in rows],
                          indent=2, ensure_ascii=False))
         return
     if not rows:
@@ -188,6 +189,9 @@ def show(job_id: str):
     for k in ("location", "job_type", "source", "posted_at", "first_seen_at", "status", "url", "apply_url"):
         if j.get(k):
             con.print(f"  {k}: {j[k]}")
+    from .filters import title_score
+    con.print(f"  title_score: {title_score(j.get('title'), config_mod.title_include()):g}"
+              "  (how well the title fits your title_include words)")
     if j.get("match_pct") is not None:
         con.print(f"  match: {j['match_pct']:.0f}%")
         con.print(f"  matched: {', '.join(j['matched']) or '-'}")

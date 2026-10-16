@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .. import paths
+from ..filters import title_score
 from ..models import STATUSES, JobPosting
 
 MIGRATIONS = Path(__file__).parent / "migrations"
@@ -124,7 +125,10 @@ def get_job(conn: sqlite3.Connection, job_id: str) -> dict | None:
 
 def list_jobs(conn: sqlite3.Connection, *, status: str | None = None, min_match: float | None = None,
               include_hidden: bool = False, only_hidden: bool = False, query: str | None = None,
-              source: str | None = None, limit: int | None = None, order: str = "newest") -> list[dict]:
+              source: str | None = None, limit: int | None = None, order: str = "newest",
+              title_include: list[str] | None = None) -> list[dict]:
+    """title_include (filters.title_include) adds a title_score to each row; order="match" sorts by
+    match_pct desc, then title_score desc, then posted desc."""
     where, args = [], []
     if status:
         where.append("j.status=?"); args.append(status)
@@ -141,16 +145,24 @@ def list_jobs(conn: sqlite3.Connection, *, status: str | None = None, min_match:
         args.append(_fts_query(query))
     orders = {
         "newest": "COALESCE(j.posted_at, j.first_seen_at) DESC",
-        "match": "COALESCE(j.match_pct,-1) DESC, j.first_seen_at DESC",
+        "match": "COALESCE(j.match_pct,-1) DESC, COALESCE(j.posted_at, j.first_seen_at) DESC",
         "company": "lower(j.company) ASC",
     }
     sql = "SELECT j.* FROM jobs j"
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY " + orders.get(order, orders["newest"])
-    if limit:
+    if limit and order != "match":
         sql += f" LIMIT {int(limit)}"
-    return [row_to_dict(r) for r in conn.execute(sql, args)]
+    rows = [row_to_dict(r) for r in conn.execute(sql, args)]
+    for r in rows:
+        r["title_score"] = title_score(r.get("title"), title_include)
+    if order == "match":
+        rows.sort(key=lambda r: r.get("posted_at") or r.get("first_seen_at") or "", reverse=True)
+        rows.sort(key=lambda r: (r["match_pct"] if r.get("match_pct") is not None else -1, r["title_score"]),
+                  reverse=True)
+        rows = rows[:int(limit)] if limit else rows
+    return rows
 
 
 def _fts_query(q: str) -> str:
