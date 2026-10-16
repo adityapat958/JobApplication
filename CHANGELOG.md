@@ -1,6 +1,7 @@
 # Changelog
 
-## Unreleased
+## v0.1.1
+**Resume import from PDF**
 - Resume import now accepts a **PDF** as well as a Word file (`jobapp resume import resume.pdf --prepare`):
   text via `pdftotext -layout` (fallback pypdf) turned into headings/bullets, links from the PDF's link
   annotations, page count from the PDF. Scanned (image-only) PDFs are refused with a plain-English message.
@@ -13,6 +14,34 @@
   other lines unmarked); match the source's paper size (letter/A4).
 - Tailoring with several Skills lines: no repeats of keywords already on another Skills line or inside the
   user's own "AWS (ECS, IAM)"-style item; commas inside brackets no longer split an item.
+
+**Real-world fixes (Word resume from an online resume builder)**
+- Invisible text in .docx files (hidden runs, white-on-white tracking codes) is dropped before the word check.
+- Custom heading styles count for the section order; prompt rules for summaries, spacer paragraphs,
+  U+2011 hyphens / subscripts and skills tables.
+- Tailored Skills lines are never hyphenated (an ATS reads "statis-"/"tics" as two words).
+
+**Fixes in this release**
+- Page check on import passes when the converted resume has the same number of pages **or fewer** than
+  the original; it fails only when it has more. The prompt now asks for the template's default spacing,
+  never pads spacing to reach the original page count, and only tightens the spacing knobs to stay
+  within it.
+- The same job on FINN and LinkedIn (or any two sites) is listed once: company names are compared without
+  AS/ASA/AB/Inc/Ltd/LLC/GmbH/Norge/Norway/Bank/Group and punctuation, titles without (m/f/d)-style tags.
+  The copy stays in the database for its link and shows as "also on: linkedin" on the main entry
+  (list, show, dashboard, Claude). The main entry is the one you are tracking, else the one with a job
+  description, else the one seen first. Your status, notes and done flags are never changed. Existing
+  databases are cleaned up once by migration 2.
+- FINN: the company now comes from the ad's employer data (JSON-LD, then "Arbeidsgiver"), then the search
+  card; a "company" equal to the job title is rejected.
+- "Missing keywords" no longer lists contact people, phone numbers or e-mail lines: the contact section
+  (Kontaktperson / Kontakt / Contact / Spørsmål om stillingen) is removed before keywords are extracted,
+  and the contact person's name is ignored anywhere in the ad.
+- Sorting by match: equal match % is now ordered by how well the title fits your `title_include` words
+  (specific multi-word words beat generic ones like graduate/trainee/junior/intern), then newest. Used by
+  `jobapp list --sort match`, the dashboard (now sorted by best match by default) and Claude's
+  `list_jobs`. `jobapp show` prints the job's `title_score`.
+- Privacy: docs use neutral test-user labels; the privacy scan also blocks the test users' names.
 
 ## v0.1.0 — first release
 - Job sources: LinkedIn (public guest pages), FINN.no, Simplify GitHub lists; BI portal placeholder (needs login, planned).

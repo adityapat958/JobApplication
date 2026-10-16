@@ -234,3 +234,45 @@ PHASE 8: DONE
   the title into the company field; "missing keywords" can include a contact person's name; match % depends
   on bank granularity (aliases onto one keyword count once) — a `match_only` keyword section would help;
   summary paragraphs keep the template's paragraph indent.
+
+## fix/v0.1.1 — real-world fixes + release 0.1.1
+1. Import page gate: passes when converted pages <= source pages (fails only when more; detail says
+   "N page(s), source has M — K page(s) too many: tighten the spacing knobs"). Prompt rule 4.5 rewritten:
+   page budget = at most the source count, start from the template's default spacing, never pad spacing to
+   reach the source count, tighten marked knobs only if it would exceed. Tests: fewer-pages pass, more-pages
+   fail + fix-report wording, prompt wording.
+2. Cross-source dedupe: migration 002 adds `duplicate_of` (nullable FK, ON DELETE SET NULL) and `dedupe_key`.
+   `db/dedupe.py` normalises company (fold/casefold, A/S, legal forms, Norge/Norway, Bank/Group, punctuation)
+   and title (gender tags like (m/f/d)/(m/k), punctuation, whitespace); same key from different sources within
+   45 days → one group. Primary = tracked by the user, else not filter-hidden, else has a description, else
+   first seen; copies are kept (URL) but hidden from list/dashboard/MCP and shown as "also on: <source>"
+   (list column, `show`, dashboard row + JD page, MCP `also_on`). Only `duplicate_of` is written; status/done/
+   notes never touched; two tracked copies both stay visible. `migrate()` gained `_post_migrate` (Python data
+   step in the migration's transaction) → existing DBs deduped once. On copies of the test DBs: user B
+   (Norway) 5 and 13 FINN/LinkedIn copies linked (e.g. "DNB Bank ASA" ↔ "DNB", "NOBA BANK GROUP" ↔ "NOBA Bank
+   Group"); user A (US) / user C 0. Duplicates are not sent to connectors as "added".
+3. FINN: (a) card company only from `.text-caption` (a bare `<strong>` only outside the title link); ad page
+   company = JSON-LD hiringOrganization.name, then "Arbeidsgiver"; any company equal to the title is rejected;
+   the ad page's company now overrides the card's in poll. Anonymised fixtures `search_title_in_company.html`,
+   `ad_title_as_company.html`. (b) `text.strip_contact` removes Kontaktperson/Kontakt/Contact/"Spørsmål om
+   stillingen" blocks and phone/e-mail lines before keyword extraction; names found there are blanked
+   everywhere in the ad. Re-score of a copy of the user B (Norway) real-data DB: 44 junk "missing" terms gone
+   (contact names, recruiter titles, "Søknadsfrist …"). Fixture `ad_contact_section.html` (fake people).
+4. Ranking: `filters.title_score` (best title_include hit: words + length/20; generic graduate/trainee/junior/
+   intern* = 0.25; extra specific hits +10%). `list --sort match`, MCP `list_jobs`, dashboard (default sort is
+   now "best match") order by match_pct → title_score → posted. `show` prints title_score. On the user B data a
+   "Graduate 2027 - Subsea, Risers and Pipelines Engineer" (0.25) now ranks below "Data Scientist" (1.57) at 50%.
+5. Privacy: docs use "test user A (US)" / "test user B (Norway)" / "test user C" (userA/userB/userC); no
+   school-specific identification. `privacy_scan.sh` also fails on the test users' first/last names and handles
+   (patterns split so the script doesn't match itself; BUILD_SPEC no longer allow-listed). History rewritten
+   with `git filter-repo --replace-text` (+ `--mailmap`: commit author/committer/tagger → neutral
+   "JobApplication Maintainer", repo-local git identity set to the same) — nothing had ever been pushed (no
+   remote). `stable` and `v0.1.0` were carried to the rewritten release commit. `git log -p --all | grep -iE
+   "<test-user names>"` → no output. Full-history scan: only fake e-mails (example.com/.no/.invalid), fake
+   555 / +47 numbers in tests, no home paths or tokens.
+- Tests: 269 passed, 3 deselected offline (+39: tests/test_dedupe.py 26, tests/test_ranking.py 5, FINN 3,
+  contact 2, import 2, privacy 1); `pytest -m live` 3 passed. Version 0.1.1 (pyproject, `__version__`,
+  CHANGELOG, uv.lock).
+- Open issues: dedupe needs equal normalised names ("If Forsikring (If Skadeforsikring)" vs "If Insurance" stay
+  separate); a same-site repost isn't merged; `list` default sort is still newest (`--sort match` opt-in).
+PHASE fix/v0.1.1: DONE

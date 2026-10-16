@@ -151,10 +151,11 @@ def list_cmd(status: Optional[str] = typer.Option(None, "--status"),
     from . import db
     conn = _conn()
     rows = db.list_jobs(conn, status=status, min_match=min_match, only_hidden=hidden, query=search,
-                        order=sort, limit=limit)
+                        order=sort, limit=limit, title_include=config_mod.title_include())
     if as_json:
         print(json.dumps([{k: r[k] for k in ("id", "company", "title", "location", "source", "posted_at",
-                                              "match_pct", "status", "hidden_reason", "url")} for r in rows],
+                                              "match_pct", "title_score", "status", "hidden_reason", "url")}
+                          | {"also_on": [a["source"] for a in r["also_on"]]} for r in rows],
                          indent=2, ensure_ascii=False))
         return
     if not rows:
@@ -168,7 +169,8 @@ def list_cmd(status: Optional[str] = typer.Option(None, "--status"),
     for r in rows:
         posted = (r["posted_at"] or r["first_seen_at"] or "")[:10]
         match = "" if r["match_pct"] is None else f"{r['match_pct']:.0f}%"
-        cells = [r["id"], r["company"] or "", r["title"] or "", r["location"] or "", r["source"], posted,
+        src = r["source"] + "".join(f" +{a['source']}" for a in r.get("also_on") or [])
+        cells = [r["id"], r["company"] or "", r["title"] or "", r["location"] or "", src, posted,
                  match, r["status"]]
         if hidden:
             cells.append(r["hidden_reason"] or "")
@@ -188,10 +190,17 @@ def show(job_id: str):
     for k in ("location", "job_type", "source", "posted_at", "first_seen_at", "status", "url", "apply_url"):
         if j.get(k):
             con.print(f"  {k}: {j[k]}")
+    from .filters import title_score
+    con.print(f"  title_score: {title_score(j.get('title'), config_mod.title_include()):g}"
+              "  (how well the title fits your title_include words)")
     if j.get("match_pct") is not None:
         con.print(f"  match: {j['match_pct']:.0f}%")
         con.print(f"  matched: {', '.join(j['matched']) or '-'}")
         con.print(f"  missing: {', '.join(j['missing']) or '-'}")
+    for a in j.get("also_on") or []:
+        con.print(f"  also on: {a['source']}  {a['url'] or ''}")
+    if j.get("duplicate_of"):
+        con.print(f"  same job as {j['duplicate_of']} (listed there; this copy is hidden)")
     if j.get("hidden"):
         con.print(f"  hidden by filters: {j['hidden_reason']}")
     if j.get("notes"):
@@ -234,7 +243,7 @@ def rescore():
     except ValueError as e:
         raise UserError(str(e))
     conn = _conn()
-    rows = db.list_jobs(conn, include_hidden=True)
+    rows = db.list_jobs(conn, include_hidden=True, include_duplicates=True)
     for r in rows:
         m.score_and_save(conn, r)
     con.print(f"Re-scored {len(rows)} job(s).")

@@ -53,17 +53,25 @@ def parse_search(html: str) -> Iterator[JobPosting]:
             continue
         aid = m[1]
         title = clean(a.get_text())
-        comp = art.select_one(".text-caption strong") or art.select_one("strong")
+        comp = art.select_one(".text-caption strong") or art.select_one(".text-caption")
+        if comp is None:  # a bare <strong> counts only outside the title link
+            comp = next((st for st in art.select("strong") if a not in st.parents and st not in a.descendants), None)
         pills = [clean(li.get_text()) for li in art.select("ul li") if not li.select_one("time")]
         t = art.select_one("time")
         posted = (parse_iso(t.get("datetime")) or parse_relative(t.get_text())) if t else None
         teaser = art.select_one("h3")
         yield JobPosting(
-            source="finn", source_id=aid, title=title, company=clean(comp.get_text() if comp else ""),
+            source="finn", source_id=aid, title=title,
+            company=company_or_blank(clean(comp.get_text() if comp else ""), title),
             location=pills[0] if pills else "", url=AD.format(id=aid), apply_url=AD.format(id=aid),
             job_type=guess_job_type(title), posted_at=posted,
             raw={"teaser": clean(teaser.get_text()) if teaser else ""},
         )
+
+
+def company_or_blank(company: str, title: str) -> str:
+    """A company value equal to the job title is a parsing slip, not a company."""
+    return "" if company and fold(clean(company)) == fold(clean(title)) else company
 
 
 LABELS = {"stillingstittel": "title", "arbeidsgiver": "company", "sted": "location",
@@ -120,6 +128,13 @@ def parse_ad(html: str) -> dict:
         body = soup.select_one(".import-decoration") or soup.select_one("main")
         if body:
             out["description"] = html_to_text(str(body)) or None
+    # Company: JSON-LD hiringOrganization.name, then the "Arbeidsgiver" label; never the title.
+    if out.get("company") and out.get("title") and not company_or_blank(out["company"], out["title"]):
+        out.pop("company")
+        for k, v in pairs:
+            if LABELS.get(fold(k).rstrip(":")) == "company" and company_or_blank(v, out["title"]):
+                out["company"] = v
+                break
     if out.get("deadline") is not None and not isinstance(out["deadline"], str):
         out["deadline"] = out["deadline"].isoformat()
     return {k: v for k, v in out.items() if v not in (None, "")}

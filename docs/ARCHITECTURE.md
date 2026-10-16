@@ -18,7 +18,7 @@
 | `src/jobapp/cli.py` | Every command. Catches all errors; tracebacks go to `logs/jobapp.log` only. |
 | `config.py` | pydantic v2 models for `config.yaml` (`extra=forbid`) + friendly "did you mean" errors. |
 | `paths.py` | `JOBAPP_HOME` (default `~/JobApplication-data`), bundled examples/prompts lookup. |
-| `db/` | SQLite (WAL). Numbered migrations in `db/migrations/NNN_*.sql`, tracked with `PRAGMA user_version`. FTS5 on company/title/description. |
+| `db/` | SQLite (WAL). Numbered migrations in `db/migrations/NNN_*.sql`, tracked with `PRAGMA user_version`; `_post_migrate` runs Python data steps inside a migration's transaction. FTS5 on company/title/description. |
 | `models.py` | `JobPosting` dataclass; job id = first 10 hex of sha1(`source|source_id`). |
 | `http.py` | Polite client: browser UA, ≥2 s per host, retry/backoff on 429/5xx, URL guards (robots rules). |
 | `sources/` | One module per site + registry (`sources/__init__.py`). See ADDING_A_SOURCE.md. |
@@ -45,7 +45,21 @@
 ## Matching
 `match_pct = matched / max(matched + missing, 6)`. `matched` = bank keywords (or aliases) found in the JD,
 word-boundary, accent/hyphen-insensitive, plural-tolerant. `missing` = Title-Case/ACRONYM/CamelCase runs in the
-JD that aren't in the bank (minus company, places, stopwords). No JD → `match_pct` NULL ("manual JD").
+JD that aren't in the bank (minus company, places, stopwords). The contact block (Kontaktperson / Contact /
+Spørsmål om stillingen, phone and e-mail lines) is removed first (`text.strip_contact`), and the contact
+person's name is ignored anywhere in the ad. No JD → `match_pct` NULL ("manual JD").
+
+Sort by match = `match_pct` desc → `title_score` desc → posted desc. `title_score` (`filters.title_score`) = weight
+of the best `title_include` term the title hits: words + length (specific multi-word terms win); generic terms
+(graduate, trainee, junior, intern*) weigh 0.25.
+
+## Cross-source duplicates
+`db/dedupe.py`: `dedupe_key` = normalised company (no AS/ASA/AB/Inc/Ltd/LLC/GmbH/Norge/Norway/Bank/Group,
+punctuation) + `|` + normalised title (no (m/f/d)-style tags, punctuation). Rows with the same key from different
+sources whose posted (else first-seen) dates are within 45 days form a group: the primary is the one the user tracks
+(status ≠ new or notes), else not filter-hidden, else with a description, else seen first. The others get
+`duplicate_of` = primary (kept for their URL, hidden from list/dashboard/MCP, shown as `also_on`). Only
+`duplicate_of` is written; recomputed on insert/update/status/notes/hidden. Migration 002 runs it once.
 
 ## Tailoring
 Order per Skills line: JD-matched keywords → the user's original picks → rest of that bank section, until the

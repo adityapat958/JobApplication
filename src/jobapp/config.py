@@ -191,6 +191,14 @@ def parse(data: dict | None) -> Config:
         raise ConfigError(friendly_errors(e)) from None
 
 
+def title_include() -> list[str]:
+    """filters.title_include of the active profile, or [] if there is no valid config (ranking only)."""
+    try:
+        return list(load().filters.title_include)
+    except Exception:  # noqa: BLE001
+        return []
+
+
 def load(path: Path | None = None) -> Config:
     path = path or paths.config_path()
     if not path.exists():

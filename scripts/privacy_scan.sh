@@ -6,10 +6,12 @@ cd "$(dirname "$0")/.."
 
 # Patterns are split so this file doesn't match itself.
 P1="Patward""han"; P2="apatward""han"; P3="adi""tyapat"; P4="gh""p_"; P5="/ho""me/"
-WORDS="$P1|$P2|$P3|$P4|$P5|/Us""ers/[a-z]"
+# Real first/last names and handles of the owner and test users (never in git; docs say "test user A/B/C").
+N1="Kshi""tij"; N2="Hase""eb"; N3="Adi""tya"; N4="Chaud""hary"; N5="Kha""lid"; N6="kshi""tijc"; N7="hase""ebkh""alid"
+WORDS="$P1|$P2|$P3|$P4|$P5|/Us""ers/[a-z]|$N1|$N2|$N3|$N4|$N5|$N6|$N7"
 PHONE='(\+[0-9]{1,3}[ .-]?)?\(?[0-9]{3}\)?[ .-][0-9]{3}[ .-][0-9]{4}([^0-9]|$)|\+47[ ]?[0-9]{2}[ ]?[0-9]{2}[ ]?[0-9]{2}[ ]?[0-9]{2}([^0-9]|$)|\+[0-9]{1,3}[ ]?\([0-9]{3}\)'
-# Files allowed to mention the banned words (the original build spec describes the rules themselves).
-ALLOW='^(docs/BUILD_SPEC\.md|scripts/privacy_scan\.sh)$'
+# The scanner itself is the only file allowed to hold the (split) patterns.
+ALLOW='^scripts/privacy_scan\.sh$'
 
 fail=0
 files=$(git ls-files -co --exclude-standard | grep -Ev "$ALLOW" || true)

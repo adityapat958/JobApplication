@@ -23,8 +23,8 @@ log = get("web")
 HERE = Path(__file__).parent
 ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 LIST_FIELDS = ("id", "source", "company", "title", "location", "job_type", "posted_at", "first_seen_at",
-               "match_pct", "matched", "status", "done", "hidden", "hidden_reason", "url", "apply_url",
-               "jd_saved_at", "notes")
+               "match_pct", "title_score", "matched", "status", "done", "hidden", "hidden_reason", "url", "apply_url",
+               "jd_saved_at", "notes", "also_on")
 
 _refresh = {"running": False, "last": None, "summary": "", "error": None}
 _refresh_lock = threading.Lock()
@@ -78,7 +78,7 @@ def create_app(poll_fn=None) -> FastAPI:
     @app.get("/api/jobs")
     def jobs(hidden: bool = True):
         c = conn()
-        rows = db.list_jobs(c, include_hidden=hidden)
+        rows = db.list_jobs(c, include_hidden=hidden, order="match", title_include=config_mod.title_include())
         return [{k: r.get(k) for k in LIST_FIELDS} for r in rows]
 
     @app.get("/api/jobs/{job_id}")
