@@ -118,6 +118,14 @@ def check_db() -> Check:
     return Check("Database", OK, f"version {v}")
 
 
+def local_time(iso: str) -> str:
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(iso).astimezone().strftime("%Y-%m-%d %H:%M")
+    except (TypeError, ValueError):
+        return str(iso)[:16]
+
+
 def check_last_runs() -> list[Check]:
     p = paths.db_path()
     if not p.exists():
@@ -130,7 +138,7 @@ def check_last_runs() -> list[Check]:
         run = conn.execute("SELECT * FROM runs WHERE id=?", (r["id"],)).fetchone()
         errs = json.loads(run["errors"]) if run["errors"] else []
         name = f"Last search: {run['source']}"
-        when = (run["finished_at"] or run["started_at"])[:16].replace("T", " ")
+        when = local_time(run["finished_at"] or run["started_at"])
         if errs:
             out.append(Check(name, WARN, f"{when}: {errs[0]}" + (f" (+{len(errs)-1} more)" if len(errs) > 1 else ""),
                              "Usually temporary (site busy). If it keeps happening, run 'jobapp report-bug'."))

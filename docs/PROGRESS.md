@@ -15,3 +15,31 @@
 - Tests: 30 passed (offline).
 - Acceptance: `jobapp init && jobapp config validate && pytest` ✔
 PHASE 1: DONE
+
+## Phase 2 — feat/sources
+- `http.py`: polite client (browser UA, ≥2 s per host, retry/backoff on 429/5xx honoring Retry-After, URL guards).
+- `filters.py`: pure `apply_filters(job, filters) -> (keep, reason)`. Whole-word matching, abbreviation expansion
+  (Sr./Sr→senior, Jr→junior, Mgr→manager…), `word*` prefix and `*word` suffix wildcards (needed for Norwegian
+  compounds like "Finansanalytiker"), æøå-safe, soft hyphens removed, unknown values kept. Reasons stored in
+  `jobs.hidden_reason` (→ `jobapp list --hidden`). Jobs with a non-`new` status are never hidden.
+- Sources (registry in `sources/__init__.py`): simplify (HTML tables, ↳ rows, 🔒 closed rows skipped, multi-location
+  `<details>`, emoji badges stripped, age→posted_at, JD via JSON-LD/main text of ATS page), linkedin (guest
+  endpoints; pages actually return 10 cards, so paging advances by cards returned; `f_TPR` from max_age_days;
+  JD + employment type from jobPosting; failed JD → job kept with description NULL), finn (search cards, ad
+  JSON-LD + Norwegian label fallback: Stillingstittel/Arbeidsgiver/Sted/Søknadsfrist, "15. oktober 2026";
+  robots guard forbids industry+occupation and abTestKey; only the verified Oslo location code is sent, other
+  locations are matched locally), bi_portal stub raising `NeedsLogin` (doctor: "needs login (planned)").
+- `poll.py`: fetch → filter → upsert → JD only for kept jobs (budget 200/source) → re-filter → score hook →
+  connectors; per-source errors captured in `runs.errors`; re-filter of all jobs after full polls.
+- CLI `poll [--source] [--dry-run] [--no-jd]`, `list [--status --min-match --hidden --search --sort --json]`,
+  `show`, `mark`. Doctor shows per-source reachability and last-run results.
+- Tests: 113 offline passed; `pytest -m live` 3 passed.
+- Live smoke (test profiles in ~/.jobapp-test, outside repo):
+  - userA (simplify summer_internships+new_grad, linkedin "robotics perception engineer"/United States):
+    simplify 2451 fetched / 190 kept (92 with JD), linkedin 30 fetched / 29 kept (29 with JD). ✔ ≥10
+  - userB (linkedin analyst/Oslo + graduate/Norway, finn analyst + trainee):
+    linkedin 59 fetched / 31 kept (30 with JD), finn 108 fetched / 56 kept (56 with JD). ✔ ≥10
+- Note: FINN robots.txt also lists `Disallow: /job/` for AI *training* crawlers (GPTBot, ClaudeBot, CCBot…);
+  user-directed agents (ChatGPT-User) are only restricted from /job/salary/. JobApplication is a user-run
+  personal tool with low request volume and never touches /job/salary/ — documented in the README.
+PHASE 2: DONE
