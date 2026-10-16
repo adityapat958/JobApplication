@@ -10,7 +10,7 @@ from .filters import apply_filters
 from .http import Http, HttpError
 from .log import get
 from .models import JobPosting
-from .text import detect_language, parse_iso
+from .text import detect_language, fold, parse_iso
 
 log = get("poll")
 
@@ -31,9 +31,14 @@ def _apply_details(job: JobPosting, info: dict) -> None:
         job.description = info["description"]
     if info.get("job_type") and not job.job_type:
         job.job_type = info["job_type"]
-    for k in ("company", "location", "title"):
+    for k in ("location", "title"):
         if info.get(k) and not getattr(job, k):
             setattr(job, k, info[k])
+    # The ad page's employer (JSON-LD / labelled field) beats the search card; never keep company == title.
+    if info.get("company") and fold(info["company"]) != fold(job.title or ""):
+        job.company = info["company"]
+    elif job.company and fold(job.company) == fold(job.title or ""):
+        job.company = ""
     if info.get("posted_at") and not job.posted_at:
         job.posted_at = info["posted_at"]
     for k in ("deadline", "seniority", "employment_type", "industries"):

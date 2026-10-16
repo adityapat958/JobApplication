@@ -205,3 +205,30 @@ def test_registry():
     for name in sources.REGISTRY:
         s = sources.get(name)
         assert isinstance(s, sources.Source)
+
+
+def test_finn_card_without_company_never_uses_title():
+    jobs = list(finn.parse_search(fixture_text("finn", "search_title_in_company.html")))
+    assert [(j.title, j.company) for j in jobs] == [("Maritim Trainee", ""), ("Dataanalytiker", "")]
+
+
+def test_finn_ad_company_prefers_jsonld_then_label_never_title():
+    info = finn.parse_ad(fixture_text("finn", "ad_title_as_company.html"))
+    # JSON-LD hiringOrganization.name == title here → rejected → "Arbeidsgiver" label wins
+    assert info["title"] == "Maritim Trainee"
+    assert info["company"] == "Eksempel Maritime Klynge AS"
+    info = finn.parse_ad(fixture_text("finn", "ad_contact_section.html"))
+    assert info["company"] == "Eksempel Energi AS"
+
+
+def test_finn_poll_ad_company_beats_card(profile):
+    from jobapp import db
+    from jobapp.poll import run_poll
+    cfg = config.parse({"sources": {"finn": {"enabled": True, "max_pages": 1, "searches": [{"q": "trainee"}]}},
+                        "filters": {"title_include": ["trainee"]}})
+    http = mock_http({"job/search": fixture_text("finn", "search_title_in_company.html"),
+                      "job/ad/471000001": fixture_text("finn", "ad_title_as_company.html")})
+    conn = db.connect()
+    run_poll(cfg, conn, http=http)
+    row = conn.execute("SELECT company, title FROM jobs WHERE source_id='471000001'").fetchone()
+    assert tuple(row) == ("Eksempel Maritime Klynge AS", "Maritim Trainee")

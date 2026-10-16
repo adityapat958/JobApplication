@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 
-from ..text import fold
+from ..text import fold, strip_contact
 from .keywords import Bank
 
 STOP = {
@@ -154,8 +154,9 @@ def score(text: str | None, bank: Bank, ignore: tuple[str, ...] = (), title: str
     if not text:
         core, tech = find_matched(title, bank) if title else ([], [])
         return MatchResult(None, core, tech, [])
+    text, people = strip_contact(text)
     core, tech = find_matched(text + "\n" + title, bank)
-    missing = find_missing(text, bank, ignore)
+    missing = find_missing(text, bank, ignore + tuple(people))
     n = len(core) + len(tech)
     # A JD naming only one or two skills tells us little, so the denominator has a floor.
     denom = max(n + len(missing), MIN_DENOM)

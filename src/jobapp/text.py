@@ -179,3 +179,67 @@ def parse_iso(s: str | None) -> datetime | None:
     except ValueError:
         d = parse_date(s)
         return to_datetime(d) if d else None
+
+
+# ── contact section (names/phones/emails are not skills) ──────────────────
+_CONTACT_HEAD = re.compile(
+    r"^\W*(kontaktpersoner|kontaktperson|kontaktinformasjon|kontakt oss|kontakt|contact persons?|"
+    r"contact information|contact details|contact us|contacts?|spørsmål om stillingen|"
+    r"questions about (?:the|this) (?:position|role|job))\b\s*:?\s*(.*)$", re.I)
+_ALWAYS_CONTACT = re.compile(r"^\W*(spørsmål om stillingen|questions about (?:the|this) (?:position|role|job))", re.I)
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+# +47 912 34 567 | 22 33 44 55 | 91234567 | (555) 123-4567 — but not "2024-2026"
+_PHONE = re.compile(r"(?<![\w-])(?:\+\d{1,3}[\s.]?\d[\d\s.-]{6,}\d|\d{8}|\d{2,3}(?:[\s.]\d{2,3}){3}|\d{3}[\s.]\d{2}[\s.]\d{3}"
+                    r"|\(\d{3}\)\s?\d{3}-\d{4}|\d{3}-\d{3}-\d{4})(?![\w-])")
+_PHONE_LABEL = re.compile(r"^\W*(tlf|telefon|mobil|mob|phone|tel|mobile|e-?post|e-?mail|epost)\b\.?\s*:?", re.I)
+_SECTION = re.compile(r"^\W*(kvalifikasjoner|arbeidsoppgaver|vi tilbyr|om oss|om stillingen|om arbeidsgiver\w*|"
+                      r"personlige egenskaper|qualifications|responsibilities|requirements|what we offer|"
+                      r"about (?:us|the role|the company)|benefits)\b", re.I)
+_NAME = re.compile(r"\b([A-ZÆØÅ][a-zæøåäöüéèáó'’-]+(?:\s+(?:van|von|de|der)?\s*[A-ZÆØÅ][a-zæøåäöüéèáó'’-]+){1,2})\b")
+_NAME_AFTER = re.compile(r"\b(?:til|to|kontakt|contact|med|with)\s+" + _NAME.pattern)
+
+
+def _contactish(line: str) -> bool:
+    return bool(_EMAIL.search(line) or _PHONE.search(line) or _PHONE_LABEL.match(line))
+
+
+def strip_contact(text: str | None) -> tuple[str, list[str]]:
+    """Remove the contact block (Kontaktperson / Contact / Spørsmål om stillingen + the short lines under it)
+    and phone/email lines. Returns (text without them, person names seen there)."""
+    if not text:
+        return text or "", []
+    keep: list[str] = []
+    block: list[str] = []
+    in_block = 0  # lines left to consume in a contact block
+    for line in text.splitlines():
+        s = line.strip()
+        m = _CONTACT_HEAD.match(s)
+        if m and (not m[2] or s.endswith(":") or len(m[2].split()) <= 8 or _ALWAYS_CONTACT.match(s)):
+            block.append(m[2])
+            in_block = 10
+            continue
+        if _ALWAYS_CONTACT.match(s) or _contactish(s):
+            block.append(s)
+            continue
+        if in_block and s:
+            short = len(s.split()) <= 8 and not s.startswith(("•", "-", "*", "–")) and not _SECTION.match(s)
+            if short and not s.endswith(":"):
+                block.append(s)
+                in_block -= 1
+                continue
+            in_block = 0
+        keep.append(line)
+    names: list[str] = []
+    for b in block:
+        first = re.split(r"[,|–—(]| - ", b)[0].strip()
+        cands = [m[1] for m in _NAME_AFTER.finditer(b)]
+        if _NAME.fullmatch(first):
+            cands.append(first)
+        for n in cands:
+            n = re.sub(r"\s+", " ", n).strip()
+            if n not in names:
+                names.append(n)
+    out = "\n".join(keep)
+    for n in names:  # the same person mentioned elsewhere in the ad
+        out = re.sub(r"\b" + re.escape(n).replace(r"\ ", r"\s+") + r"\b", "\n", out)
+    return out, names

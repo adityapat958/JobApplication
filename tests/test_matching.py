@@ -89,3 +89,32 @@ def test_norwegian_jd():
     bank = Bank.load(paths.examples_profile() / "resume" / "keywords.yaml")
     core, tech = find_matched("Vi søker en kandidat med erfaring innen økonomi, analyse og Excel.", bank)
     assert "Financial Analysis" in core and "Data Analysis" in core and "Excel" in tech
+
+
+def test_missing_skips_contact_people_phones_emails():
+    from conftest import fixture_text
+    from jobapp.sources import finn
+    jd = finn.parse_ad(fixture_text("finn", "ad_contact_section.html"))["description"]
+    r = score(jd, BANK, ("Eksempel Energi AS", "Oslo"))
+    assert "Power BI" in r.matched and "SQL" in r.matched
+    assert "Azure Synapse" in r.missing and "Google Analytics" in r.missing
+    joined = " ".join(r.missing)
+    for bad in ("Kari", "Nordmann", "Ola", "Testmann", "Mobil", "Forretningsutvikling"):
+        assert bad not in joined, r.missing
+
+
+def test_strip_contact_keeps_real_content():
+    from jobapp.text import strip_contact
+    jd = ("Kontakt med kunder er en sentral del av jobben, og du jobber tett med salg og marked hver dag.\n"
+          "Oppstart 2024-2026.\n"
+          "Contact person: Jane Example, Head of Analytics\n"
+          "Phone: (555) 123-4567\n\n"
+          "Requirements\n• Snowflake\n• Looker Studio\n"
+          "Send questions to Jane Example.")
+    out, names = strip_contact(jd)
+    assert "Jane Example" in names
+    assert "Kontakt med kunder" in out and "2024-2026" in out
+    assert "Snowflake" in out and "Looker Studio" in out
+    assert "Jane" not in out and "555" not in out
+    r = score(jd, BANK)
+    assert "Looker Studio" in r.missing and not any("Jane" in m for m in r.missing)
