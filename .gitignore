@@ -17,3 +17,4 @@ build/
 JobApplication-data/
 output/
 import/
+.claude/settings.local.json
