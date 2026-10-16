@@ -336,7 +336,9 @@ def content_diff(source: str, output: str) -> tuple[list[str], list[str]]:
 def pdf_text(pdf: Path) -> str:
     exe = which("pdftotext")
     if exe:
-        r = subprocess.run([exe, "-enc", "UTF-8", str(pdf), "-"], capture_output=True, text=True)
+        # -raw: the default mode "dehyphenates" every line ending in "-", gluing real compounds
+        # ("fail-" / "closed" -> "failclosed"); content_diff handles line-end hyphens itself.
+        r = subprocess.run([exe, "-enc", "UTF-8", "-raw", str(pdf), "-"], capture_output=True, text=True)
         if r.returncode == 0:
             return r.stdout
     from pypdf import PdfReader

@@ -55,7 +55,8 @@ def layout_text(pdf: Path) -> tuple[str, bool]:
 
 
 def plain_text(pdf: Path) -> str:
-    t = _pdftotext(pdf, layout=False)
+    """Text for the word check. `-raw` keeps line-end hyphens (see docx_import.pdf_text)."""
+    t = _pdftotext(pdf, layout=False, extra=["-raw"])
     return t if t is not None else _pypdf_text(pdf, layout=False)
 
 

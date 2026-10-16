@@ -93,13 +93,18 @@ target_pages: {{TARGET_PAGES}}
   % <<SKILLS-TECH-END>>
   ```
 - If the source has one skills line, use CORE only. If it has more than 2, CORE = the first
-  conceptual/domain line and TECH = the first tools/languages line. The rest go inside the
-  TECH block as extra `\item`s. Report this in the mapping notes.
+  conceptual/domain line and TECH = the broadest tools/technologies line (prefer e.g. "Technical
+  Skills", "Tools", "Cloud & Infrastructure" over a narrow "Languages" line). Each marker pair wraps
+  exactly one `\item`. The other skills lines stay as plain `\item`s in the same format, outside the
+  markers, in their source position: keep the source order of all lines, even if that puts the TECH
+  block before the CORE block. Report this in the mapping notes.
 
 **4.5 Layout fit**
 - Aim for exactly {{TARGET_PAGES}} page(s). Adjust ONLY the template's marked knobs
   (`% ← FONT SIZE`, margins, `\titlespacing`, `itemsep`/`topsep`, `\vspace` between entries),
   within these limits: font 9.5–11pt, margins 0.3–0.75in.
+- Paper size: match `page_size_in` from the layout facts on the `\documentclass` line
+  (8.5 x 11 -> `letterpaper`, 8.27 x 11.69 -> `a4paper`).
 - Never fix length by changing the content.
 
 **4.6 Things that don't fit**

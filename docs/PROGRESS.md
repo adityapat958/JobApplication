@@ -170,3 +170,35 @@ PHASE 8: DONE
 - Open issues unchanged (see the first phase 8 section): BI portal login, Obsidian connector, JS-rendered JDs,
   LinkedIn 10 jobs/page, FINN location codes beyond Oslo, no test on a real Mac.
 PHASE 8: DONE
+
+## feat/pdf-import — resume import from PDF
+- `jobapp resume import file.pdf --prepare|--verify|--accept|--api` (new `resume/pdf_extract.py`): layout text
+  via `pdftotext -layout` (fallback pypdf) → markdown-ish (`##` headings, `-` bullets with wrapped lines joined,
+  wrapped Skills lines joined, `⇥` for wide gaps), links from /Link annotations with anchor text from
+  `pdftotext -bbox` (→ `[text](url)`), page count via pypdf, layout facts with `source_format: pdf` and a
+  "bold/italic not recoverable" note. Image-only (scanned) PDFs are refused in plain English.
+- Gates for PDF sources: token multiset diff (NFKC → ligatures split; bullet glyphs incl. Wingdings `§`/`Ø`/`o`
+  stripped only at line starts; `|`/`·` are punctuation), new `content_diff` forgives a line-end hyphen split
+  only for that exact pair; URL set, page count, compile, markers unchanged. Gate name says "PDF"/"Word".
+- Prompt template made generic (`{{SOURCE_KIND}}`, `{{SOURCE_MARKDOWN}}`, `{{SOURCE_LAYOUT}}`); all rules
+  kept; added PDF notes (⇥, emphasis unknown, link exactly what the source links). CLI help, CLAUDE.md,
+  `/import-resume`, `/setup`, README, MCP tool descriptions say "Word or PDF".
+- Real-world test (one real 2-page LaTeX-made PDF resume, data kept in `~/.jobapp-test/`, not in the repo;
+  1068 tokens, 9 links, 6 skills lines):
+  - Run 1 (original prompt): passed on round 1 (all 5 gates).
+  - Weaknesses found and fixed: (a) rule 4.4 ("other skills lines go inside the TECH block") conflicted with
+    4.1 (keep order) when the domain line isn't first → rewritten; (b) no rule for paper size (template is A4,
+    source Letter) → added; (c) re-import with the new rules failed round 1 on words: `pdftotext`'s default
+    mode dehyphenates, gluing "fail-"+"closed" / "end-to-"+"end" at line ends — a false failure an agent can't
+    fix by editing words → switched the gate to `pdftotext -raw`; round 2 passed with the unchanged .tex.
+    (d) tailoring with 6 skills lines repeated keywords already on unmarked lines and split "AWS (ECS, IAM)"
+    at inner commas → fixed in `build.choose`/`parse_items`.
+  - Visual check (page 1 + 2 side by side): same structure, order and links; template look differs as expected.
+  - Poll (simplify new_grad + 2 LinkedIn searches): 576 jobs, 20 kept by filters; tailored PDF built for the
+    top match (47% match, 2 pages = original page count).
+- Tests: 226 passed, 3 deselected (live). New: `tests/test_pdf_import.py` (16, fake PDF compiled from LaTeX:
+  extract, links, pypdf fallback, scan/bad file, prompt, ligatures/bullets/separators, hyphenation, pass,
+  reworded fail with tokens listed, page count, CLI, API mode, line-end hyphens in a built PDF) + 2 build tests.
+- Open issues: two-column PDFs (layout text interleaves columns; diff still works, prompt markdown is harder
+  to read); PDFs without a ToUnicode map extract garbage → word gate fails (message could say so);
+  `stable`/`v0.1.0` untouched.

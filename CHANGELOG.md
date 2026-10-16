@@ -7,6 +7,12 @@
 - Word-check now handles ligatures (ﬁ ﬂ ﬀ), bullet glyphs and words hyphenated at a line end (only that
   exact split is forgiven, so rewording is still caught).
 - Prompt template, CLI help, CLAUDE.md, `/import-resume`, README and MCP tool descriptions say "Word or PDF".
+- Word-check reads PDFs with `pdftotext -raw`: the default mode silently glued compounds broken at a line
+  end ("fail-" / "closed" → "failclosed") and failed correct imports.
+- Prompt: keep the source order of all Skills lines (CORE = first domain line, TECH = broadest tools line,
+  other lines unmarked); match the source's paper size (letter/A4).
+- Tailoring with several Skills lines: no repeats of keywords already on another Skills line or inside the
+  user's own "AWS (ECS, IAM)"-style item; commas inside brackets no longer split an item.
 
 ## v0.1.0 — first release
 - Job sources: LinkedIn (public guest pages), FINN.no, Simplify GitHub lists; BI portal placeholder (needs login, planned).

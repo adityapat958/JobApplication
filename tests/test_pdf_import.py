@@ -170,3 +170,16 @@ def test_api_mode_pdf(profile, pdf):
         return "```latex\n" + CORRECT + "```"
     rep = di.run_api(pdf, call=fake)
     assert rep.ok and len(prompts) == 1 and "source_format: pdf" in prompts[0]
+
+
+@needs_tex
+def test_line_end_hyphens_in_built_pdf(tmp_path):
+    """pdftotext's default mode glues 'fail-' + 'closed' into 'failclosed'; the gate must not."""
+    tex = (r"\documentclass{article}\pagestyle{empty}\usepackage[T1]{fontenc}\begin{document}"
+           r"\noindent fail-\\closed mint and end-to-\\end runs with a valu-\\ation model\end{document}")
+    pdf = compile_tex(tex, tmp_path / "h.pdf")
+    src = "fail-closed mint and end-to-end runs with a valuation model"
+    assert di.content_diff(src, di.pdf_text(pdf)) == ([], [])
+    assert di.content_diff("fail closed mint and end to end runs with a valuation model",
+                           di.pdf_text(pdf)) == ([], [])  # hyphens are separators on both sides
+    assert di.content_diff(src.replace("valuation", "pricing"), di.pdf_text(pdf))[0] == ["pricing"]
