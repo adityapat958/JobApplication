@@ -64,3 +64,20 @@ PHASE 2: DONE
   userB: DNV / Fremtind / DNV (example resume, 1 page). Byte-identity verified on perception.tex too.
 - Tests: 147 offline passed.
 PHASE 3: DONE
+
+## Phase 4 — feat/dashboard
+- `web/server.py` (FastAPI, 127.0.0.1 only; ported from the old jobdesk server): `/` dashboard, `/job/<id>` JD+notes
+  page, `/api/jobs`, `/api/jobs/<id>`, `…/status`, `…/notes`, `…/description` (hand-saved JD → never overwritten,
+  rescored), `/api/build/<id>`, `/api/pdf/<id>` (attachment download), `/api/reveal/<id>` (Finder/folder),
+  `/api/refresh` (background poll + status), `/api/stats`, `/api/health`.
+- Safety: POSTs need `X-JobApp: 1` header; Host must be localhost (blocks cross-site requests / DNS rebinding);
+  PDFs only served from `output/`.
+- `web/index.html`: table (company, title, location, site, posted, match bar, status dropdown), filters (search,
+  to-do/tracking/all/hidden-by-filters with reason, site, type, age, min match), sort presets + header sort,
+  "Build resume" → downloads `<name>.pdf` + "Show in Finder/folder" button, "Find new jobs" button.
+- `platform.py`: reveal (`open -R` on mac, `xdg-open <dir>` on linux).
+- Acceptance: `jobapp serve --port 8799` on the userB profile; curl /api/health, /api/stats, / ;
+  POST /api/build/<id> → `UserB_Tester_Borregaard_Data-Analyst.pdf`, GET /api/pdf/<id> → application/pdf
+  attachment (valid PDF); POST without header → 403. Headless-Chrome screenshot checked.
+- Tests: 154 offline passed (TestClient incl. build→PDF download).
+PHASE 4: DONE
