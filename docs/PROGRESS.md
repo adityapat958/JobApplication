@@ -135,3 +135,20 @@ PHASE 6: DONE
 - Tests: plist generation (plistlib round-trip), crontab lines, mac install/reinstall/status/remove with mocked
   launchctl, linux install never calls subprocess, reveal commands, keyring + .env fallback. 187 offline passed.
 PHASE 7: DONE
+
+## Phase 8 — release
+- README (novice, Mac-first: "Install with Claude" one sentence + `/setup`, manual install, everyday commands,
+  Word import, Claude Desktop snippet via `jobapp mcp-config`, troubleshooting, good-citizen/robots note,
+  screenshot placeholder), docs/ARCHITECTURE.md, docs/ADDING_A_SOURCE.md, CHANGELOG.md, LICENSE (MIT),
+  .gitignore (+ .claude/settings.local.json).
+- Fresh clone → `uv sync` → `jobapp init` → `config validate` → pytest 187 passed. `uv build` wheel contains
+  examples, prompt, dashboard HTML and migrations; wheel installed in a clean venv → `init` + `doctor` OK.
+- Privacy scan clean. Branch `stable` created at main, tag `v0.1.0` (local only, nothing pushed).
+- Open issues / next steps:
+  - BI portal: Playwright persistent-profile login (design note in `sources/bi_portal.py`).
+  - Obsidian connector (interface ready).
+  - Simplify JDs: ~50% of ATS pages are JS-rendered (Workday etc.) → no JD; user can paste it in the dashboard.
+  - LinkedIn guest search returns 10 cards per page (spec said 25); paging handles either.
+  - FINN location codes: only Oslo verified; other places are filtered locally by text.
+  - Not tested on a real Mac (launchd/Keychain/`open -R` are unit-tested with mocks).
+PHASE 8: DONE
