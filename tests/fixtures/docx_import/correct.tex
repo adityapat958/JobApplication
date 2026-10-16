@@ -1,0 +1,62 @@
+\documentclass[10pt, a4paper]{article}   % ← FONT SIZE
+\usepackage[top=0.70in, bottom=0.70in, left=0.70in, right=0.70in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\pagestyle{empty}
+\hypersetup{colorlinks=true, urlcolor=blue!60!black, linkcolor=blue!60!black, pdfborder={0 0 0}}
+\titleformat{\section}{\bfseries\normalsize\uppercase}{}{0em}{}[\titlerule]
+\titlespacing{\section}{0pt}{6pt}{4pt}
+\setlist[itemize]{leftmargin=0.15in, itemsep=1pt, parsep=0pt, topsep=2pt}
+\newcommand{\expentry}[3]{%
+    \noindent\textbf{#1} \hfill {\small #2}\\[-1pt]
+    {\small\textit{#3}}\vspace{1pt}%
+}
+\newcommand{\projentry}[3]{%
+    \noindent\textbf{#1}~{\small[\href{#2}{Link}]}
+    \hfill {\small\textit{#3}}%
+}
+\newcommand{\projnolink}[2]{%
+    \noindent\textbf{#1} \hfill {\small\textit{#2}}%
+}
+\newcommand{\eduentry}[3]{%
+    \noindent\textbf{#1} \hfill {\small #2}\\[-1pt]
+    {\small #3}%
+}
+\begin{document}
+\begin{center}
+    {\Large\bfseries Sam Sample}\\[2pt]
+    {\small Finance Student ~|~ Oslo, Norway}\\[1pt]
+    {\small \href{mailto:sam@example.com}{sam@example.com}~|~\href{https://www.linkedin.com/in/sample}{LinkedIn}}
+\end{center}
+
+\section{Education}
+\eduentry{Example Business School}{Aug 2024 -- June 2026}{MSc in Finance, GPA 4.8/5.0}
+
+\section{Skills}
+\begin{itemize}[leftmargin=0in, label={}, itemsep=2pt]
+    % <<SKILLS-CORE>>
+    \item {\small\textbf{Core Competencies:} Financial Analysis, Valuation, Market Research}
+    % <<SKILLS-CORE-END>>
+    % <<SKILLS-TECH>>
+    \item {\small\textbf{Technical Skills:} Excel, SQL, Power BI}
+    % <<SKILLS-TECH-END>>
+\end{itemize}
+
+\section{Experience}
+\expentry{Fjord Capital}{June 2025 -- Aug 2025}{Summer Analyst}
+\begin{itemize}
+    \item Built a valuation model for 12 Nordic utilities
+    \item Presented findings to the investment committee
+\end{itemize}
+
+\section{Projects}
+\noindent\textbf{Housing Dashboard} -- \href{https://example.com/dash}{demo}
+\begin{itemize}
+    \item Tracked rental prices across 15 districts
+\end{itemize}
+\end{document}
