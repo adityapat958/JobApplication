@@ -91,14 +91,17 @@ def check_resume(cfg: config_mod.Config) -> Check:
                      "Put your resume at that path, or import a Word file with 'jobapp resume import'.")
     if not kw.exists():
         return Check("Resume", FAIL, f"{kw} not found", "Create a keyword list (copy the example from 'jobapp init').")
+    from .resume.build import check_markers
+    from .resume.keywords import Bank
     try:
-        from .resume.build import check_markers
         check_markers(tex.read_text(encoding="utf-8"))
-    except ImportError:
-        pass
     except ValueError as e:
         return Check("Resume", FAIL, str(e),
                      "The resume needs the SKILLS marker comments so the Skills lines can be tailored.")
+    try:
+        Bank.load(kw)
+    except ValueError as e:
+        return Check("Resume keywords", FAIL, str(e), "Fix keywords.yaml (see the example from 'jobapp init').")
     return Check("Resume", OK, str(tex))
 
 

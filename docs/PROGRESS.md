@@ -43,3 +43,24 @@ PHASE 1: DONE
   user-directed agents (ChatGPT-User) are only restricted from /job/salary/. JobApplication is a user-run
   personal tool with low request volume and never touches /job/salary/ — documented in the README.
 PHASE 2: DONE
+
+## Phase 3 — feat/resume
+- `resume/keywords.py`: bank loader (all groups, any names), alias targets validated, friendly errors.
+- `resume/matching.py` (port of swap.py): accent/hyphen-normalised, word-boundary, plural-tolerant, case-sensitive
+  for ≤2-char/short acronyms (R, C, SQL…), "(VLMs)" parentheticals match either form, aliases → canonical.
+  `missing` = Title-Case/ACRONYM/CamelCase runs not in the bank, minus company/location/geo/stopwords.
+  `match_pct = matched / max(matched + missing, 6)` (floor stops 2-keyword JDs scoring 100%); no JD → pct NULL,
+  title-only matches kept. Poll scores new/JD-updated jobs; `jobapp rescore` re-scores everything.
+- `resume/build.py`: rewrites ONLY the first `\item` between `% <<SKILLS-CORE>>…-END>>` / `% <<SKILLS-TECH>>…-END>>`
+  (extra `\item`s in the TECH block untouched; CORE-only resumes supported). Order: JD-matched → user's original
+  picks → rest of bank, capped at the original line's character budget (+5%). LaTeX escaping of & % $ # _.
+  Byte-identity outside markers is tested on the example resume and a comment-heavy resume.
+- `resume/tex.py`: tectonic → latexmk → pdflatex; first-error extraction; page count via pypdf.
+- `resume/service.py`: builds in a temp dir (copies .cls/.sty/images), writes
+  `output/<First>_<Last>_<Company>_<Role>.pdf` (æøå transliterated), warns if page count differs from the
+  untouched resume (cached), records `builds`, notifies connectors. `jobapp build <id>`.
+- Acceptance: 3 real PDFs per profile built from live jobs —
+  userA: Intelletec / Skydio / Evolution USA (perception.tex, 2 pages each = original);
+  userB: DNV / Fremtind / DNV (example resume, 1 page). Byte-identity verified on perception.tex too.
+- Tests: 147 offline passed.
+PHASE 3: DONE
