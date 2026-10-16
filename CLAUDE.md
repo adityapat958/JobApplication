@@ -58,7 +58,7 @@ Add `--json` to `list`/`doctor` when you want to read results programmatically.
 |---|---|
 | Python packages | run `uv sync` in this folder |
 | LaTeX engine | Mac: `brew install tectonic` (Linux: `sudo apt install texlive-latex-extra latexmk` — ask first) |
-| pandoc (warning) | only needed for Word import: `brew install pandoc` |
+| pandoc (warning) | only needed for Word import: `brew install pandoc` (PDF import uses `pdftotext` from poppler if present: `brew install poppler`) |
 | Settings (config.yaml) | read the listed problems, fix `config.yaml`, run `config validate` |
 | Resume / Resume keywords | file missing → `jobapp init`; markers missing → re-add the SKILLS marker comments around the two Skills `\item` lines |
 | Database | run `uv run jobapp migrate` |
@@ -68,8 +68,8 @@ Add `--json` to `list`/`doctor` when you want to read results programmatically.
 | Last search: … warning | usually temporary; run `poll` again later |
 | Connector warnings | jobs are still saved; turn the connector off in `config.yaml` if it keeps failing |
 
-## Importing a Word resume (agent mode — no API key needed)
-1. `uv run jobapp resume import "<path to file.docx>" --prepare` → writes `$JOBAPP_HOME/import/prompt.md`.
+## Importing a Word or PDF resume (agent mode — no API key needed)
+1. `uv run jobapp resume import "<path to file.docx or file.pdf>" --prepare` → writes `$JOBAPP_HOME/import/prompt.md`.
 2. Read `prompt.md` and follow it exactly. You are a **transcriber**: never reword, add, shorten or reorder content.
 3. Write only the LaTeX to `$JOBAPP_HOME/import/resume.tex` (and the notes to `import/mapping_notes.yaml`).
 4. `uv run jobapp resume import --verify`. If it fails, read `import/fix_report.md`, fix only those problems,

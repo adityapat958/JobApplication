@@ -14,7 +14,7 @@ from . import tools
 INSTRUCTIONS = (
     "JobApplication helps a non-technical user find jobs and make a tailored PDF resume per job. "
     "Explain results in plain English. Typical flow: doctor → find_jobs → list_jobs → job_details → "
-    "build_resume → mark_job(applied). For a Word resume: import_resume_prepare then "
+    "build_resume → mark_job(applied). For a Word or PDF resume: import_resume_prepare then "
     "import_resume_submit_tex (max 3 rounds)."
 )
 

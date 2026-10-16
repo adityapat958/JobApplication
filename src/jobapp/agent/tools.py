@@ -140,7 +140,7 @@ def mark_job(job_id: str, status: str) -> dict:
 
 @_safe
 def import_resume_prepare(docx_path: str) -> dict:
-    """Start a Word resume import: returns the prompt to follow."""
+    """Start a resume import from a Word (.docx) or PDF file (docx_path = path to either): returns the prompt to follow."""
     from ..resume import docx_import as di
     p = di.prepare(docx_path)
     return {"ok": True, "prompt_file": str(p), "prompt": p.read_text(encoding="utf-8"),
@@ -149,7 +149,7 @@ def import_resume_prepare(docx_path: str) -> dict:
 
 @_safe
 def import_resume_submit_tex(tex: str, accept_if_ok: bool = False) -> dict:
-    """Check a LaTeX version of the imported resume against the Word file."""
+    """Check a LaTeX version of the imported resume against the source Word or PDF file."""
     from ..resume import docx_import as di
     di.candidate_path().parent.mkdir(parents=True, exist_ok=True)
     di.candidate_path().write_text(di.extract_latex(tex), encoding="utf-8")

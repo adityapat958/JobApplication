@@ -1,12 +1,17 @@
-# Prompt template: Word resume (.docx) -> LaTeX resume template
+# Prompt template: resume (Word .docx or PDF) -> LaTeX resume template
 
-Used by `jobdesk import-resume my_resume.docx --template templates/default.tex`.
+Used by `jobapp resume import my_resume.docx|my_resume.pdf --prepare` (agent mode) or `--api`.
 The pipeline fills the `{{...}}` slots before sending this to the LLM.
 
 Pipeline around the prompt (deterministic parts, NOT done by the LLM):
-1. `pandoc my_resume.docx -t markdown --wrap=none` -> {{DOCX_MARKDOWN}}  (keeps bold/italic/bullets/links/tables)
-2. `python-docx` reads layout facts -> {{DOCX_LAYOUT}}  (page size, margins, base font size, section order)
-3. `soffice --headless --convert-to pdf` -> page count -> {{TARGET_PAGES}}
+1. Source text -> {{SOURCE_MARKDOWN}}
+   - Word: `pandoc my_resume.docx -t markdown --wrap=none` (keeps bold/italic/bullets/links/tables;
+     fallback python-docx)
+   - PDF: `pdftotext -layout` (fallback pypdf) turned into markdown-ish text: `##` headings, `-` bullets,
+     link annotations as `[text](url)`; bold/italic are not recoverable
+2. Layout facts -> {{SOURCE_LAYOUT}}  (Word: python-docx page size, margins, base font size, section order;
+   PDF: page size, most common font size, section order, `source_format: pdf` note)
+3. Page count -> {{TARGET_PAGES}}  (Word: `docProps/app.xml` `<Pages>`; PDF: pypdf)
 4. LLM call with this prompt -> resume.tex
 5. Verify (see bottom): compile, page count, word-level content diff, visual diff. On failure, re-prompt with the error report in {{FIX_REPORT}} (max 3 rounds).
 
@@ -14,7 +19,7 @@ Pipeline around the prompt (deterministic parts, NOT done by the LLM):
 
 ## SYSTEM
 
-You are a LaTeX typesetter converting a resume from Word into a fixed LaTeX template.
+You are a LaTeX typesetter converting a resume ({{SOURCE_KIND}} file) into a fixed LaTeX template.
 You are a transcriber, not an editor. You never write, rephrase, shorten, expand, reorder,
 or "improve" resume content. Every word, number, date, and link in the source must appear
 in your output exactly once, in the same order within its section.
@@ -36,14 +41,14 @@ Available entry macros (use these, do not invent new ones unless rule 4.6 applie
 - `\eduentry{Institution}{Date range}{Degree, GPA, honours}` = education heading
 - `itemize` for bullets
 
-### 2. Source resume (pandoc markdown from the user's .docx)
+### 2. Source resume (markdown extracted from the user's {{SOURCE_KIND}} file)
 ```markdown
-{{DOCX_MARKDOWN}}
+{{SOURCE_MARKDOWN}}
 ```
 
 ### 3. Source layout facts
 ```yaml
-{{DOCX_LAYOUT}}
+{{SOURCE_LAYOUT}}
 target_pages: {{TARGET_PAGES}}
 ```
 
@@ -52,8 +57,12 @@ target_pages: {{TARGET_PAGES}}
 **4.1 Content fidelity (most important)**
 - Copy text verbatim. Allowed changes: LaTeX escaping (4.3) and whitespace only.
 - Keep the source's section order and its entry order within each section.
-- Keep the source's bold/italic emphasis on the same words (`\textbf{}` / `\textit{}`).
-- Keep every hyperlink: `[text](url)` -> `\href{url}{text}`. Email -> `\href{mailto:x}{x}`.
+- Keep the source's bold/italic emphasis on the same words (`\textbf{}` / `\textit{}`). If the layout
+  facts say the source is a PDF, emphasis is unknown: use only the emphasis the template's macros give.
+- Keep every hyperlink: `[text](url)` -> `\href{url}{text}` (exact URL). Email -> `\href{mailto:x}{x}`
+  when the source links it. Link exactly the URLs the source links — no more, no fewer: a URL or
+  email that is plain text in the source stays plain text. A project whose title is a link ->
+  `\projentry{Title}{url}{...}`.
 - Do not add anything that isn't in the source: no summary, no skills, no metrics, no links.
   If the template has a slot the source can't fill, delete that slot. Don't fill it.
 
@@ -67,6 +76,9 @@ target_pages: {{TARGET_PAGES}}
 - Escape `& % $ # _ { } ~ ^ \` as `\& \% \$ \# \_ \{ \} \textasciitilde{} \textasciicircum{} \textbackslash{}`.
 - Delete zero-width spaces (U+200B, U+200C, U+200D, U+FEFF) and soft hyphens (U+00AD).
 - Replace unicode bullets (● • ▪ ◦ –  used as bullets) with `\item`.
+- PDF sources: `⇥` marks a wide gap (e.g. a right-aligned date/place) — put that text in the macro's
+  right-aligned slot, never print `⇥`. Join words the PDF hyphenated at a line end only if the
+  hyphen is clearly a line break (`end-to-` + `end` stays `end-to-end`). Ligatures (ﬁ ﬂ ﬀ) -> plain letters.
 - Smart quotes -> ``` `` ``` and `''`. Date ranges use `--`. Leave hyphens inside words alone.
 - Accented letters: keep them as UTF-8 (the template loads `inputenc`/`T1`).
 
@@ -125,10 +137,12 @@ Fix ONLY these issues; keep everything else identical to your previous output.
 ## Verification gates (code, not LLM). All must pass before the .tex is accepted
 1. **Compiles**: `latexmk -pdf` exits 0 and the log has no `Overfull \hbox` > 5pt.
 2. **Page count** = target_pages.
-3. **Content diff**: normalise both sides (`pdftotext` of the new PDF vs the pandoc plain text:
-   lowercase, strip punctuation/whitespace). Token multiset diff must be empty, apart from
-   tokens on an allowlist (section-title casing, "GitHub" link labels).
-4. **Links**: set of URLs in the .docx == set of `\href` targets.
+3. **Content diff**: normalise both sides (`pdftotext` of the new PDF vs the source text — pandoc plain
+   text for Word, `pdftotext` for PDF: NFKC (splits ligatures), lowercase, strip punctuation, `|`
+   separators and bullet glyphs). Token multiset diff must be empty, apart from tokens on an allowlist
+   ("GitHub"/"LinkedIn"/"Link" labels the macros add). A word hyphenated at a line end in either PDF
+   counts as the whole word only for that exact split.
+4. **Links**: set of URLs in the source (.docx relationships / PDF link annotations) == set of `\href` targets.
 5. **Markers**: exactly one `<<SKILLS-CORE>>…-END>>` pair; `apply.py --dry-run` succeeds.
 6. **Visual check (report only)**: render page 1 of both PDFs to PNG side by side for the
-   user to eyeball. Not a hard gate, because the template's look intentionally differs from Word's.
+   user to eyeball. Not a hard gate, because the template's look intentionally differs from the source's.

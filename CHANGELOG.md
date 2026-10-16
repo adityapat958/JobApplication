@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+- Resume import now accepts a **PDF** as well as a Word file (`jobapp resume import resume.pdf --prepare`):
+  text via `pdftotext -layout` (fallback pypdf) turned into headings/bullets, links from the PDF's link
+  annotations, page count from the PDF. Scanned (image-only) PDFs are refused with a plain-English message.
+- Word-check now handles ligatures (ﬁ ﬂ ﬀ), bullet glyphs and words hyphenated at a line end (only that
+  exact split is forgiven, so rewording is still caught).
+- Prompt template, CLI help, CLAUDE.md, `/import-resume`, README and MCP tool descriptions say "Word or PDF".
+
 ## v0.1.0 — first release
 - Job sources: LinkedIn (public guest pages), FINN.no, Simplify GitHub lists; BI portal placeholder (needs login, planned).
 - Filters with reasons ("why hidden"), whole-word matching, `*` wildcards for Norwegian compound words, Sr./Jr. abbreviations.

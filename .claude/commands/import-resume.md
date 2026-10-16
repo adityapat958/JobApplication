@@ -1,7 +1,7 @@
 ---
-description: Turn the user's Word resume into the PDF template (you type, the tool checks)
+description: Turn the user's Word or PDF resume into the PDF template (you type, the tool checks)
 ---
-File: $ARGUMENTS (ask for the .docx path if empty; on a Mac they can drag the file into the chat).
+File: $ARGUMENTS (ask for the .docx or .pdf path if empty — prefer the Word file if they have both, it keeps bold/italic; on a Mac they can drag the file into the chat).
 
 1. `uv run jobapp resume import "<file>" --prepare`
 2. Read `$JOBAPP_HOME/import/prompt.md` completely and follow it. You are a transcriber: copy every word

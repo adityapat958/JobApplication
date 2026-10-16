@@ -18,8 +18,8 @@ Claude runs the tool, explains things in plain English, and fixes settings for y
   every other letter of your resume stays exactly as you wrote it. The PDF is named
   `First_Last_Company_Role.pdf`.
 - **Tracks** what you did: interested → applied → interview → offer.
-- **Imports your Word resume** into the PDF template. Claude types it; the tool checks every word, link and
-  the page count against your Word file.
+- **Imports your Word or PDF resume** into the PDF template. Claude types it; the tool checks every word, link and
+  the page count against your original file.
 - Runs **on your computer only**. Your jobs, resume and settings stay in a private folder
   (`~/JobApplication-data`), never in this repository.
 
@@ -63,14 +63,16 @@ Your settings are in `~/JobApplication-data/config.yaml`; after editing run `uv 
 it explains mistakes and suggests the right spelling. Filter words match whole words; add `*` for
 word beginnings/endings (`robot*` → robotics, `*analytiker` → Finansanalytiker).
 
-## Word resume import
+## Word or PDF resume import
 ```bash
-uv run jobapp resume import ~/Desktop/resume.docx --prepare   # Claude follows import/prompt.md
+uv run jobapp resume import ~/Desktop/resume.docx --prepare   # or resume.pdf; Claude follows import/prompt.md
 uv run jobapp resume import --verify                          # checks words, links, pages, markers
 uv run jobapp resume import --accept                          # use it (old resume is backed up)
 ```
 With your own API key (`uv run jobapp key set ANTHROPIC_API_KEY`, stored in the Mac Keychain) the whole
-loop runs automatically: `uv run jobapp resume import resume.docx --api`.
+loop runs automatically: `uv run jobapp resume import resume.docx --api` (or `resume.pdf`).
+A Word file gives the best result (bold/italic are kept); a PDF works too as long as its text can be selected
+(not a scan).
 
 ## Claude Desktop
 JobApplication includes an MCP server, so Claude Desktop can use it too. Print your personal config snippet:
