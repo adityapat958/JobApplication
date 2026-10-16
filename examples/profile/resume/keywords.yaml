@@ -1,0 +1,48 @@
+# KEYWORD BANK — everything you can honestly claim.
+# The tailoring step only ever picks words from this list.
+# core_competencies -> the "Core Competencies" line, technical_skills -> the "Technical Skills" line.
+
+core_competencies:
+  analysis:
+    - Financial Analysis
+    - Financial Modelling
+    - Valuation
+    - Budgeting and Forecasting
+    - Market Research
+    - Business Analysis
+    - Data Analysis
+    - KPI Reporting
+  strategy:
+    - Business Strategy
+    - Stakeholder Management
+    - Project Management
+    - Process Improvement
+    - Due Diligence
+    - Competitive Analysis
+  communication:
+    - Presentation Skills
+    - Report Writing
+    - Cross-functional Collaboration
+    - Client Communication
+
+technical_skills:
+  office: [Excel, PowerPoint, Word]
+  analytics: [SQL, Power BI, Tableau, Python]
+  finance: [Bloomberg Terminal, Refinitiv Eikon]
+  business: [SAP, Salesforce, Jira]
+  languages: [English, Norwegian]
+
+# Aliases — job ads use different words for the same thing: ad term -> your keyword.
+aliases:
+  "financial modeling": Financial Modelling
+  "forecasting": Budgeting and Forecasting
+  "data analytics": Data Analysis
+  "dashboards": KPI Reporting
+  "stakeholders": Stakeholder Management
+  "microsoft excel": Excel
+  "ms excel": Excel
+  "powerbi": Power BI
+  "regnskap": Financial Analysis
+  "økonomi": Financial Analysis
+  "analyse": Data Analysis
+  "prosjektledelse": Project Management

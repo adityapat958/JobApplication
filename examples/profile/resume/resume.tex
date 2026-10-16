@@ -1,0 +1,166 @@
+% ============================================================
+%  Resume template — JobApplication (fake example person)
+%  ATS-clean | one column | 1 page
+% ============================================================
+%  Layout knobs are marked with  % ←  (font size, margins, spacing).
+%  The two Skills lines between the  % <<SKILLS-...>>  markers are
+%  rewritten for every job. Everything else is never touched.
+% ============================================================
+
+\documentclass[10pt, a4paper]{article}   % ← FONT SIZE
+
+% ── Page geometry ─────────────────────────────────────────
+\usepackage[
+    top    = 0.50in,   % ← TOP MARGIN
+    bottom = 0.50in,   % ← BOTTOM MARGIN
+    left   = 0.60in,   % ← LEFT MARGIN
+    right  = 0.60in    % ← RIGHT MARGIN
+]{geometry}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\pagestyle{empty}
+
+% ── Link colours ──────────────────────────────────────────
+\hypersetup{
+    colorlinks = true,
+    urlcolor   = blue!60!black,   % ← LINK COLOUR
+    linkcolor  = blue!60!black,
+    pdfborder  = {0 0 0}
+}
+
+% ── Section title style ───────────────────────────────────
+\titleformat{\section}{\bfseries\normalsize\uppercase}{}{0em}{}[\titlerule]
+\titlespacing{\section}
+    {0pt}    % left indent
+    {6pt}    % ← SPACE BEFORE SECTION TITLE
+    {4pt}    % ← SPACE AFTER  SECTION TITLE
+
+% ── Bullet list spacing ───────────────────────────────────
+\setlist[itemize]{
+    leftmargin = 0.15in,   % ← BULLET LEFT INDENT
+    itemsep    = 1pt,      % ← SPACE BETWEEN BULLETS
+    parsep     = 0pt,
+    topsep     = 2pt       % ← SPACE BEFORE FIRST BULLET
+}
+
+% ── Reusable entry commands ───────────────────────────────
+%  \expentry{Company / Org}{Date range}{Role / subtitle}
+\newcommand{\expentry}[3]{%
+    \noindent\textbf{#1} \hfill {\small #2}\\[-1pt]
+    {\small\textit{#3}}\vspace{1pt}%
+}
+
+%  \projentry{Title}{URL}{Tech stack / category}
+\newcommand{\projentry}[3]{%
+    \noindent\textbf{#1}~{\small[\href{#2}{Link}]}
+    \hfill {\small\textit{#3}}%
+}
+
+%  \projnolink{Title}{Tech stack / category}
+\newcommand{\projnolink}[2]{%
+    \noindent\textbf{#1} \hfill {\small\textit{#2}}%
+}
+
+%  \eduentry{Institution}{Date}{Degree / details}
+\newcommand{\eduentry}[3]{%
+    \noindent\textbf{#1} \hfill {\small #2}\\[-1pt]
+    {\small #3}%
+}
+
+% ============================================================
+\begin{document}
+% ============================================================
+
+% ── Header ───────────────────────────────────────────────
+\begin{center}
+    {\Large\bfseries Alex Example}\\[2pt]
+    {\small Business Analytics Student ~|~ Finance, Strategy, Data}\\[1pt]
+    {\small
+        \href{mailto:alex@example.com}{alex@example.com}~|~%
+        \href{https://www.linkedin.com/in/example}{LinkedIn}~|~%
+        Oslo, Norway%
+    }
+\end{center}
+\vspace{-4pt}
+
+% ── Education ────────────────────────────────────────────
+\section{Education}
+
+\eduentry{Example Business School}{Aug 2024 -- June 2026 (Expected)}%
+    {M.Sc.\ Business Analytics,~GPA:~A~|~Dean's List}\\[1pt]
+{\small \textbf{Courses:} Corporate Finance, Data-Driven Decision Making, Strategy, Econometrics}
+
+\vspace{3pt}
+\eduentry{Sample University}{Aug 2021 -- June 2024}%
+    {B.Sc.\ Economics and Business Administration}
+
+% ── Skills ───────────────────────────────────────────────
+\section{Skills}
+\vspace{1pt}
+\begin{itemize}[leftmargin=0in, label={}, itemsep=2pt]
+    % <<SKILLS-CORE>>
+    \item {\small\textbf{Core Competencies:}
+        Financial Analysis, Financial Modelling, Valuation, Market Research,
+        Business Analysis, Data Analysis, Stakeholder Management, Project Management,
+        Process Improvement, Presentation Skills}
+    % <<SKILLS-CORE-END>>
+    % <<SKILLS-TECH>>
+    \item {\small\textbf{Technical Skills:}
+        Excel, PowerPoint, SQL, Power BI, Tableau, Python, Bloomberg Terminal, SAP, English, Norwegian}
+    % <<SKILLS-TECH-END>>
+\end{itemize}
+
+% ── Experience ───────────────────────────────────────────
+\section{Experience}
+
+\expentry{Northwind Consulting}{June 2025 -- Aug 2025}{Summer Intern, Strategy \& Operations}
+\begin{itemize}
+    \item Built an Excel model of regional sales for a retail client, finding \textbf{12\%} in
+          avoidable logistics cost
+    \item Interviewed 15 store managers and summarised findings in a 20-slide deck for the partner team
+    \item Automated a weekly KPI report in Power BI, saving the team about \textbf{4 hours} per week
+\end{itemize}
+
+\vspace{4pt}
+\expentry{Example Business School}{Jan 2025 -- May 2025}{Teaching Assistant, Corporate Finance}
+\begin{itemize}
+    \item Ran weekly problem sessions for 60 students on valuation, WACC and capital budgeting
+    \item Wrote solution guides and graded case assignments with clear written feedback
+\end{itemize}
+
+\vspace{4pt}
+\expentry{Contoso Bank}{June 2024 -- Aug 2024}{Summer Analyst, Credit}
+\begin{itemize}
+    \item Prepared credit memos for small-business loans using financial statement analysis
+    \item Cleaned and joined three loan datasets in SQL to track portfolio risk by sector
+\end{itemize}
+
+% ── Projects ─────────────────────────────────────────────
+\section{Projects}
+
+\projnolink{Nordic Energy Valuation Case}{DCF, Comparables, Excel}
+\begin{itemize}
+    \item Valued a listed renewable-energy company with a DCF and trading comparables; placed 2nd of 18 teams
+\end{itemize}
+
+\vspace{3pt}
+\projentry{Student Housing Demand Dashboard}{https://example.com/housing-dashboard}{Python, Tableau}
+\begin{itemize}
+    \item Combined public rental and enrolment data into a dashboard forecasting housing demand by district
+\end{itemize}
+
+% ── Other ────────────────────────────────────────────────
+\section{Languages and Interests}
+\begin{itemize}
+    \item English (fluent), Norwegian (professional), Spanish (basic)
+    \item Student finance society board member; long-distance running
+\end{itemize}
+
+\end{document}

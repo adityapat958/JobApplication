@@ -1,0 +1,42 @@
+# JobApplication settings. Edit freely — then run:  jobapp config validate
+profile:
+  name: Alex Example
+  locale: en            # en | no
+
+sources:
+  simplify:
+    enabled: false
+    lists: [summer_internships, new_grad, offseason]
+  linkedin:
+    enabled: true
+    searches:
+      - {keywords: "business analyst", location: "Oslo, Norway"}
+    max_pages: 3
+  finn:
+    enabled: false
+    searches:
+      - {q: "analytiker", location: "Oslo"}
+  bi_portal:
+    enabled: false      # needs a student login — planned for a later version
+
+filters:
+  title_include: [analyst, consultant]      # keep a job if its title has ANY of these words
+  title_exclude: [senior, lead, principal]  # hide a job if its title has ANY of these
+  locations: [Oslo, Remote]                 # empty list = anywhere
+  job_types: [fulltime, internship, parttime]
+  max_age_days: 21
+  companies_include: []                     # empty list = all companies
+  companies_exclude: []
+  languages: []                             # e.g. [en, no] to keep only English/Norwegian ads
+
+resume:
+  tex: resume/resume.tex
+  keywords: resume/keywords.yaml
+  output_name: "{first}_{last}_{company}_{role}"
+
+schedule:
+  times: ["09:00", "18:00"]
+
+connectors:
+  obsidian: {enabled: false}
+  jsonl: {enabled: false}
