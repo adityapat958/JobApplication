@@ -81,3 +81,25 @@ PHASE 3: DONE
   attachment (valid PDF); POST without header → 403. Headless-Chrome screenshot checked.
 - Tests: 154 offline passed (TestClient incl. build→PDF download).
 PHASE 4: DONE
+
+## Phase 5 — feat/docx-import
+- `resume/docx_import.py`: extract (pandoc markdown + plain, fallback python-docx → markdown-ish with bold/italic/
+  links/bullets/tables), layout facts (page size, margins, base font, section order, tables, images), page count
+  from `docProps/app.xml <Pages>`, hyperlink URLs from the .rels.
+- Prompt: `prompts/docx_to_latex.md` SYSTEM+USER sections rendered with the example template, markdown, layout,
+  target pages, fix report; agent-mode footer says where to write `import/resume.tex` and how to verify.
+- Gates (code): compiles (+ Overfull hbox > 5pt warning), page count == target, token-multiset diff of
+  pdftotext/pypdf vs the docx text (NFKC, casefold, punctuation-insensitive, de-hyphenated; allowlist
+  github/link/linkedin), URL set equality (\href, \url, \projentry 2nd arg; macro params ignored),
+  marker pairs + tailoring dry-run with the user's bank. Failure → `import/fix_report.md`; rounds counted (max 3).
+  Fenced ```latex answers are unwrapped automatically.
+- CLI: `jobapp resume import <docx> --prepare | --verify | --accept | --api`. `--accept` backs up the old resume.
+- API mode: ANTHROPIC_API_KEY / GEMINI_API_KEY from env → keychain → profile .env (`secrets.py`); loop up to 3
+  rounds feeding the fix report + previous output. Tested with a fake caller (no real API call made).
+- Tests: python-docx-generated resume; hand-written correct .tex passes; reworded .tex fails listing exactly
+  missing ["12","built"] / extra ["developed","twelve"]; link/page/marker/compile failures; fallback without pandoc.
+- Manual agent-mode run (builder as agent): generated "Ingrid Eksempel" .docx (Norwegian chars, smart quote,
+  3 skills lines, a table, 3 links) → `--prepare` → wrote resume.tex from prompt.md → `--verify` all 5 gates
+  passed on round 1 → `--accept` → tailored build OK (1 page).
+- Tests: 169 offline passed.
+PHASE 5: DONE
