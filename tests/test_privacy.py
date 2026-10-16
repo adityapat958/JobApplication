@@ -33,3 +33,11 @@ def test_detects_token(tmp_path):
 
 def test_ok_plain(tmp_path):
     assert _scan_tmp(tmp_path, "nothing personal, job id 4012345678").returncode == 0
+
+
+def test_detects_test_user_names(tmp_path):
+    for word in ("Kshi" "tij", "hase" "eb", "ADI" "TYA", "Chaud" "hary", "Kha" "lid", "Patward" "han",
+                 "kshi" "tijc", "hase" "ebkh" "alid"):
+        d = tmp_path / word
+        d.mkdir()
+        assert _scan_tmp(d, f"profile of {word} here").returncode == 1, word
