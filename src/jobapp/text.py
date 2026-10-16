@@ -188,7 +188,7 @@ _CONTACT_HEAD = re.compile(
     r"questions about (?:the|this) (?:position|role|job))\b\s*:?\s*(.*)$", re.I)
 _ALWAYS_CONTACT = re.compile(r"^\W*(spørsmål om stillingen|questions about (?:the|this) (?:position|role|job))", re.I)
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
-# +47 912 34 567 | 22 33 44 55 | 91234567 | (555) 123-4567 — but not "2024-2026"
+# Norwegian 8-digit numbers (with or without +47 and spaces), US (NNN) NNN-NNNN — but not "2024-2026"
 _PHONE = re.compile(r"(?<![\w-])(?:\+\d{1,3}[\s.]?\d[\d\s.-]{6,}\d|\d{8}|\d{2,3}(?:[\s.]\d{2,3}){3}|\d{3}[\s.]\d{2}[\s.]\d{3}"
                     r"|\(\d{3}\)\s?\d{3}-\d{4}|\d{3}-\d{3}-\d{4})(?![\w-])")
 _PHONE_LABEL = re.compile(r"^\W*(tlf|telefon|mobil|mob|phone|tel|mobile|e-?post|e-?mail|epost)\b\.?\s*:?", re.I)

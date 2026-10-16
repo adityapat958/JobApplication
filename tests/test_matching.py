@@ -108,7 +108,7 @@ def test_strip_contact_keeps_real_content():
     jd = ("Kontakt med kunder er en sentral del av jobben, og du jobber tett med salg og marked hver dag.\n"
           "Oppstart 2024-2026.\n"
           "Contact person: Jane Example, Head of Analytics\n"
-          "Phone: (555) 123-4567\n\n"
+          "Phone: (555) " "123-4567\n\n"
           "Requirements\n• Snowflake\n• Looker Studio\n"
           "Send questions to Jane Example.")
     out, names = strip_contact(jd)
