@@ -100,8 +100,11 @@ target_pages: {{TARGET_PAGES}}
   % <<SKILLS-TECH-END>>
   ```
 - If the source has one skills line, use CORE only. If it has more than 2, CORE = the first
-  conceptual/domain line and TECH = the broadest tools/technologies line (prefer e.g. "Technical
-  Skills", "Tools", "Cloud & Infrastructure" over a narrow "Languages" line). Each marker pair wraps
+  line of methods/competencies (e.g. "Core Competencies", "Machine Learning & Analytics") and TECH =
+  the broadest tools/technologies line (prefer e.g. "Technical Skills", "Tools", "Cloud &
+  Infrastructure" over a narrow "Languages" line). CORE and TECH are
+  refilled for every job, so pick lines whose label still fits a mix of the user's skills; a narrow
+  line (a "Domain" or "Industries" list, spoken languages) is a poor CORE/TECH. Each marker pair wraps
   exactly one `\item`. The other skills lines stay as plain `\item`s in the same format, outside the
   markers, in their source position: keep the source order of all lines, even if that puts the TECH
   block before the CORE block. Report this in the mapping notes.
