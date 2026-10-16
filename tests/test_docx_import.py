@@ -84,7 +84,7 @@ def test_token_normalisation():
     a = di.normalize_tokens("Aug 2024 – June 2026 · GPA 4.8/5.0 ﬁnance  Økonomi")
     b = di.normalize_tokens("aug 2024 -- june 2026 gpa 4 8 5 0 finance økonomi")
     assert a == b
-    assert di.normalize_tokens("valu-\nation") == di.normalize_tokens("valuation")
+    assert di.content_diff("valu-\nation", "valuation") == ([], [])
 
 
 @needs_tex

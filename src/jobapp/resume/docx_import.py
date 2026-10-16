@@ -1,10 +1,10 @@
-"""Word (.docx) → LaTeX template import.
+"""Word (.docx) or PDF → LaTeX template import.
 
 The LLM (Claude in Code/Desktop, or an API) only *types*; this module does everything checkable:
 extract → render prompt → verify gates (compile, pages, token diff, links, markers) → fix report.
 
 Files live in $JOBAPP_HOME/import/:
-  source.docx, meta.json, prompt.md, resume.tex (written by the agent), fix_report.md, build/
+  source.docx|source.pdf, meta.json, prompt.md, resume.tex (written by the agent), fix_report.md, build/
 """
 from __future__ import annotations
 
@@ -186,14 +186,22 @@ class Extracted:
     pages: int
     urls: set[str]
     used_pandoc: bool
+    kind: str = "docx"
 
 
-def extract(docx: Path) -> Extracted:
-    docx = Path(docx)
+SUPPORTED = (".docx", ".pdf")
+
+
+def extract(src: Path) -> Extracted:
+    docx = Path(src)
     if not docx.exists():
         raise ImportError_(f"File not found: {docx}")
-    if docx.suffix.lower() != ".docx":
-        raise ImportError_("Please give a Word .docx file (in Word: File → Save As → .docx).")
+    suffix = docx.suffix.lower()
+    if suffix == ".pdf":
+        return _extract_pdf(docx)
+    if suffix != ".docx":
+        raise ImportError_("Please give a Word (.docx) or PDF file. Old .doc files: in Word, "
+                           "File → Save As → .docx.")
     try:
         zipfile.ZipFile(docx).close()
     except zipfile.BadZipFile:
@@ -206,9 +214,28 @@ def extract(docx: Path) -> Extracted:
     return Extracted(md, plain, docx_layout(docx), docx_pages(docx) or 1, docx_urls(docx), used)
 
 
+def _extract_pdf(pdf: Path) -> Extracted:
+    from . import pdf_extract as px
+    try:
+        n = px.pages(pdf)
+    except Exception:  # noqa: BLE001 — pypdf raises many types on garbage
+        raise ImportError_("That file doesn't look like a real PDF (it can't be opened).") from None
+    text, used = px.layout_text(pdf)
+    plain = px.strip_bullets(px.plain_text(pdf))
+    if len(re.findall(r"\w", plain)) < 20:
+        raise ImportError_("This PDF has no selectable text (it's probably a scan or a picture). "
+                           "Please use the Word file, or export the PDF again from Word/Google Docs.")
+    link_list = px.links(pdf)
+    md = px.to_markdown(text, link_list)
+    return Extracted(md, plain, px.layout_facts(pdf, md, used), n or 1, {u["url"] for u in link_list}, used, "pdf")
+
+
 # ── prompt ────────────────────────────────────────────────
 def _template_tex() -> str:
     return (paths.examples_profile() / "resume" / "resume.tex").read_text(encoding="utf-8")
+
+
+SOURCE_NAMES = {"docx": "Word (.docx)", "pdf": "PDF"}
 
 
 def render_prompt(ex: Extracted, fix_report: str = "", agent_footer: bool = True) -> str:
@@ -220,8 +247,9 @@ def render_prompt(ex: Extracted, fix_report: str = "", agent_footer: bool = True
     import yaml
     layout = yaml.safe_dump(ex.layout, sort_keys=False, allow_unicode=True).strip()
     body = (body.replace("{{TEMPLATE_TEX}}", _template_tex().rstrip())
-                .replace("{{DOCX_MARKDOWN}}", ex.markdown.strip())
-                .replace("{{DOCX_LAYOUT}}", layout)
+                .replace("{{SOURCE_KIND}}", SOURCE_NAMES[ex.kind])
+                .replace("{{SOURCE_MARKDOWN}}", ex.markdown.strip())
+                .replace("{{SOURCE_LAYOUT}}", layout)
                 .replace("{{TARGET_PAGES}}", str(ex.pages))
                 .replace("{{FIX_REPORT}}", fix_report.strip()))
     if agent_footer:
@@ -240,7 +268,7 @@ def _meta_path() -> Path:
 def load_meta() -> dict:
     p = _meta_path()
     if not p.exists():
-        raise ImportError_("No import in progress. Start with: jobapp resume import <file.docx> --prepare")
+        raise ImportError_("No import in progress. Start with: jobapp resume import <your resume .docx or .pdf> --prepare")
     return json.loads(p.read_text())
 
 
@@ -253,32 +281,64 @@ def prepare(docx: str | Path) -> Path:
     ex = extract(docx)
     d = import_dir()
     d.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(docx, d / "source.docx")
-    for stale in ("resume.tex", "fix_report.md", "mapping_notes.yaml"):
+    for stale in ("source.docx", "source.pdf", "resume.tex", "fix_report.md", "mapping_notes.yaml"):
         (d / stale).unlink(missing_ok=True)
+    shutil.copy2(docx, d / f"source.{ex.kind}")
     (d / "source.md").write_text(ex.markdown, encoding="utf-8")
     (d / "source.txt").write_text(ex.plain, encoding="utf-8")
     _save_meta({"source": docx.name, "target_pages": ex.pages, "urls": sorted(ex.urls), "round": 0,
-                "used_pandoc": ex.used_pandoc})
+                "used_pandoc": ex.used_pandoc, "kind": ex.kind})
     p = d / "prompt.md"
     p.write_text(render_prompt(ex), encoding="utf-8")
     return p
 
 
 # ── verification ──────────────────────────────────────────
+_HYPH_BREAK = re.compile(r"(\w+)[-\u2010\u00ad][ \t]*\r?\n[ \t]*(\w+)")
+
+
+def _prep(text: str) -> str:
+    t = unicodedata.normalize("NFKC", text)  # also splits ligatures: ﬁ ﬂ ﬀ ﬃ → fi fl ff ffi
+    t = re.sub(r"[\u00ad\u200b\u200c\u200d\ufeff](?![ \t]*\r?\n)", "", t)
+    return t.casefold()
+
+
 def normalize_tokens(text: str) -> Counter:
-    t = unicodedata.normalize("NFKC", text)
-    t = re.sub(r"[\u00ad\u200b\u200c\u200d\ufeff]", "", t)
-    t = re.sub(r"(\w)-\n(\w)", r"\1\2", t)  # words hyphenated at line ends in the PDF
-    t = t.casefold()
-    t = re.sub(r"[^\w]+", " ", t)
+    """Lowercase word tokens; punctuation, separators (| · •) and bullet glyphs drop out."""
+    t = re.sub(r"[^\w]+", " ", _prep(text))
     return Counter(w for w in t.split() if w and w not in ALLOWLIST)
+
+
+def hyphen_breaks(text: str) -> list[tuple[str, str]]:
+    """(left, right) word halves split by a hyphen at a line end ("valu-\nation")."""
+    return [(m[1], m[2]) for m in _HYPH_BREAK.finditer(_prep(text))]
+
+
+def content_diff(source: str, output: str) -> tuple[list[str], list[str]]:
+    """Token-multiset diff → (missing from output, extra in output).
+
+    A word hyphenated at a line end ("valu-" / "ation") on one side counts as the whole word on the
+    other side — but only for that exact break, so real rewording is still caught. Compounds like
+    "real-time" are split on both sides anyway.
+    """
+    src, out = normalize_tokens(source), normalize_tokens(output)
+    missing, extra = src - out, out - src
+    for brk, whole_side, parts_side in ((hyphen_breaks(output), missing, extra),
+                                        (hyphen_breaks(source), extra, missing)):
+        for a, b in brk:
+            if whole_side[a + b] > 0 and parts_side[a] > 0 and parts_side[b] > 0 and a != b:
+                whole_side[a + b] -= 1
+                parts_side[a] -= 1
+                parts_side[b] -= 1
+    return sorted((+missing).elements()), sorted((+extra).elements())
 
 
 def pdf_text(pdf: Path) -> str:
     exe = which("pdftotext")
     if exe:
-        r = subprocess.run([exe, "-enc", "UTF-8", str(pdf), "-"], capture_output=True, text=True)
+        # -raw: the default mode "dehyphenates" every line ending in "-", gluing real compounds
+        # ("fail-" / "closed" -> "failclosed"); content_diff handles line-end hyphens itself.
+        r = subprocess.run([exe, "-enc", "UTF-8", "-raw", str(pdf), "-"], capture_output=True, text=True)
         if r.returncode == 0:
             return r.stdout
     from pypdf import PdfReader
@@ -344,14 +404,8 @@ class Report:
         return "\n".join(out) + "\n"
 
 
-def _diff(src: Counter, out: Counter) -> tuple[list[str], list[str]]:
-    missing = sorted((src - out).elements())
-    extra = sorted((out - src).elements())
-    return missing, extra
-
-
 def verify_tex(tex: str, source_plain: str, source_urls: set[str], target_pages: int,
-               bank: Bank | None = None, workdir: Path | None = None) -> Report:
+               bank: Bank | None = None, workdir: Path | None = None, kind: str = "docx") -> Report:
     rep = Report()
     workdir = Path(workdir or (import_dir() / "build"))
     workdir.mkdir(parents=True, exist_ok=True)
@@ -374,11 +428,11 @@ def verify_tex(tex: str, source_plain: str, source_urls: set[str], target_pages:
         n = texmod.page_count(pdf)
         rep.gates.append(Gate("Page count", n == target_pages, f"{n} page(s), target {target_pages}"))
         # 3. content
-        missing, extra = _diff(normalize_tokens(source_plain), normalize_tokens(pdf_text(pdf)))
+        missing, extra = content_diff(source_plain, pdf_text(pdf))
         rep.missing, rep.extra = missing, extra
         ok = not missing and not extra
         detail = "identical words" if ok else f"{len(missing)} missing, {len(extra)} extra"
-        rep.gates.append(Gate("Same words as the Word file", ok, detail))
+        rep.gates.append(Gate(f"Same words as the {'PDF' if kind == 'pdf' else 'Word'} file", ok, detail))
     # 4. links
     got = tex_urls(tex)
     want = {_norm_url(u) for u in source_urls}
@@ -421,7 +475,7 @@ def verify() -> Report:
     if tex != cand.read_text(encoding="utf-8"):
         cand.write_text(tex, encoding="utf-8")
     rep = verify_tex(tex, (d / "source.txt").read_text(encoding="utf-8"), set(meta["urls"]),
-                     int(meta["target_pages"]), _user_bank())
+                     int(meta["target_pages"]), _user_bank(), kind=meta.get("kind", "docx"))
     meta["round"] = int(meta.get("round", 0)) + 1
     meta["passed"] = rep.ok
     _save_meta(meta)
@@ -492,12 +546,9 @@ def run_api(docx: str | Path, call=None) -> Report:
     call = call or api_caller()
     if call is None:
         raise ImportError_("No ANTHROPIC_API_KEY or GEMINI_API_KEY found. Use agent mode instead: "
-                           "jobapp resume import <file.docx> --prepare")
+                           "jobapp resume import <your resume .docx or .pdf> --prepare")
     prepare(docx)
-    ex_md = (import_dir() / "source.md").read_text(encoding="utf-8")
-    meta = load_meta()
-    ex = Extracted(ex_md, (import_dir() / "source.txt").read_text(encoding="utf-8"),
-                   docx_layout(import_dir() / "source.docx"), int(meta["target_pages"]), set(meta["urls"]), True)
+    ex = extract(Path(docx).expanduser())
     fix = ""
     rep = Report()
     for _ in range(MAX_ROUNDS):

@@ -17,7 +17,7 @@ from . import log as logmod
 app = typer.Typer(add_completion=False, no_args_is_help=True, pretty_exceptions_enable=False,
                   help="JobApplication — find jobs, filter them, and build a tailored resume for each.")
 config_app = typer.Typer(no_args_is_help=True, help="Check or show your settings.")
-resume_app = typer.Typer(no_args_is_help=True, help="Your resume: import from Word.")
+resume_app = typer.Typer(no_args_is_help=True, help="Your resume: import from Word or PDF.")
 schedule_app = typer.Typer(no_args_is_help=True, help="Run job searches automatically.")
 app.add_typer(config_app, name="config")
 app.add_typer(resume_app, name="resume")
@@ -301,12 +301,12 @@ def report_bug():
 
 # ── resume import ─────────────────────────────────────────
 @resume_app.command("import")
-def resume_import(docx: Optional[str] = typer.Argument(None, help="Your Word resume (.docx)."),
+def resume_import(docx: Optional[str] = typer.Argument(None, help="Your resume: Word (.docx) or PDF."),
                   prepare: bool = typer.Option(False, "--prepare", help="Write import/prompt.md for Claude."),
-                  verify: bool = typer.Option(False, "--verify", help="Check import/resume.tex against the Word file."),
+                  verify: bool = typer.Option(False, "--verify", help="Check import/resume.tex against your Word/PDF file."),
                   accept: bool = typer.Option(False, "--accept", help="After a passing verify, use it as your resume."),
                   api: bool = typer.Option(False, "--api", help="Do the whole loop with an API key.")):
-    """Turn a Word resume into the LaTeX template (Claude does the typing, code checks it)."""
+    """Turn a Word or PDF resume into the LaTeX template (Claude does the typing, code checks it)."""
     from .resume import docx_import as di
     if verify or accept:
         rep = di.verify()
@@ -319,7 +319,7 @@ def resume_import(docx: Optional[str] = typer.Argument(None, help="Your Word res
             con.print(f"[green]Your resume is now[/green] {dst}")
         return
     if not docx:
-        raise UserError("Give the Word file, e.g.: jobapp resume import ~/Desktop/resume.docx --prepare")
+        raise UserError("Give your resume file (Word or PDF), e.g.: jobapp resume import ~/Desktop/resume.pdf --prepare")
     if api:
         rep = di.run_api(docx)
         con.print(rep.summary())
@@ -329,7 +329,7 @@ def resume_import(docx: Optional[str] = typer.Argument(None, help="Your Word res
     con.print(f"Next: write the LaTeX to {di.candidate_path()} and run 'jobapp resume import --verify'.")
 
 
-# ── API keys (only for automatic Word import) ─────────────
+# ── API keys (only for automatic Word/PDF import) ─────────────
 key_app = typer.Typer(no_args_is_help=True, help="Store API keys safely (Keychain on a Mac).")
 app.add_typer(key_app, name="key")
 

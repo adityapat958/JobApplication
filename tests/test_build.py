@@ -119,3 +119,28 @@ def test_build_pdf_example(profile):
     from pypdf import PdfReader
     txt = PdfReader(str(res.pdf)).pages[0].extract_text()
     assert "Tableau" in txt and "Northwind Consulting" in txt
+
+
+def test_no_repeats_from_other_skills_lines():
+    tex = "\n".join([
+        r"\begin{itemize}",
+        r"    \item {\small\textbf{Languages:} Python, Go}",
+        "% <<SKILLS-TECH>>",
+        r"    \item {\small\textbf{Cloud:} AWS (ECS, IAM), Docker}",
+        "% <<SKILLS-TECH-END>>",
+        "% <<SKILLS-CORE>>",
+        r"    \item {\small\textbf{Systems:} Distributed Systems, Observability}",
+        "% <<SKILLS-CORE-END>>",
+        r"\end{itemize}", ""])
+    bank = Bank(core=["Distributed Systems", "Observability", "SRE"],
+                tech=["AWS", "Docker", "Python", "Kubernetes", "Terraform"])
+    t = tailor(tex, bank, [], ["Python", "Kubernetes"])
+    assert "Python" not in t.tech and "Kubernetes" in t.tech  # Python is already on the Languages line
+    assert parse_items("AWS (ECS, IAM), Docker") == ["AWS (ECS, IAM)", "Docker"]
+    assert all(i.count("(") == i.count(")") for i in t.tech)
+    assert outside_markers(t.tex) == outside_markers(tex)
+
+
+def test_choose_keeps_users_detailed_item():
+    out = choose(["AWS", "Kubernetes"], ["AWS (ECS, IAM)", "Docker"], ["AWS", "ECS", "Docker", "Kubernetes"], budget=50)
+    assert out == ["AWS (ECS, IAM)", "Kubernetes", "Docker"]
