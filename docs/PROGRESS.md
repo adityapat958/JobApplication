@@ -103,3 +103,22 @@ PHASE 4: DONE
   passed on round 1 → `--accept` → tailored build OK (1 page).
 - Tests: 169 offline passed.
 PHASE 5: DONE
+
+## Phase 6 — feat/agent
+- `CLAUDE.md`: audience (non-technical), tone rules (no raw tracebacks), edit scope (`$JOBAPP_HOME/**` only),
+  command cheat-sheet, config primer, keyword honesty rule, per-`doctor`-check fix table, Word import agent loop.
+- `.claude/commands/`: setup, find-jobs, tailor, import-resume, applied, update (stable + `uv sync` + migrate),
+  report-bug. `.claude/settings.json`: deny Edit/Write on src/**, jobapp/** (+ tests/**, scripts/**), deny
+  `git push`, `rm -rf`; allow `uv run jobapp:*`.
+- MCP server `jobapp mcp` (stdio): find_jobs (background poll, waits ≤45 s, call again to collect), list_jobs,
+  job_details, build_resume, mark_job, import_resume_prepare, import_resume_submit_tex, doctor,
+  update_config_filters (validated, backup `config.yaml.bak`, re-filters saved jobs). Errors returned as plain
+  `{ok:false, error, hint}`. Works with mcp 2.x (`MCPServer`) and 1.x (`FastMCP`) — installed SDK is mcp 2.3.0,
+  where FastMCP was renamed.
+- `jobapp mcp-config` prints the exact claude_desktop_config.json snippet with the user's real paths.
+- `jobapp report-bug` (`bugreport.py`): zip with system info, doctor, redacted config, redacted logs, DB stats;
+  redacts profile name parts, emails, phones (keeps dates/versions), API keys/tokens/passwords, home path;
+  never includes `.env`.
+- Tests: MCP stdio client lists all 9 tools + calls list_jobs; tool functions; report-bug redaction + zip contents.
+  177 offline passed.
+PHASE 6: DONE

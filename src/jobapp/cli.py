@@ -273,11 +273,28 @@ def mcp():
     mcp_main()
 
 
+@app.command("mcp-config")
+def mcp_config():
+    """Print the snippet for Claude Desktop's claude_desktop_config.json (with your real paths)."""
+    import shutil
+    uv = shutil.which("uv")
+    repo = paths.REPO_DIR
+    if uv and (repo / "pyproject.toml").exists():
+        entry = {"command": uv, "args": ["--directory", str(repo), "run", "jobapp", "mcp"]}
+    else:
+        entry = {"command": sys.executable, "args": ["-m", "jobapp.cli_entry", "mcp"]}
+    entry["env"] = {"JOBAPP_HOME": str(paths.home())}
+    print(json.dumps({"mcpServers": {"jobapplication": entry}}, indent=2))
+    hint = ("~/Library/Application Support/Claude/claude_desktop_config.json" if sys.platform == "darwin"
+            else "Claude Desktop → Settings → Developer → Edit Config")
+    err.print(f"Paste this into {hint} (merge with any existing mcpServers), then restart Claude Desktop.")
+
+
 @app.command("report-bug")
 def report_bug():
     """Make a zip with logs and diagnostics (personal details removed) to send to the developer."""
     from .bugreport import make_report
-    p = make_report()
+    p = make_report(network=False)
     con.print(f"Bug report saved: [bold]{p}[/bold]")
     con.print("Names, emails, phone numbers and passwords were removed. You can open the zip to check.")
 
