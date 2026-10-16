@@ -144,3 +144,13 @@ def test_no_repeats_from_other_skills_lines():
 def test_choose_keeps_users_detailed_item():
     out = choose(["AWS", "Kubernetes"], ["AWS (ECS, IAM)", "Docker"], ["AWS", "ECS", "Docker", "Kubernetes"], budget=50)
     assert out == ["AWS (ECS, IAM)", "Kubernetes", "Docker"]
+
+
+def test_keyword_lines_not_hyphenated():
+    bank = Bank.from_dict({"core_competencies": ["internationalization", "telecommunications"],
+                           "technical_skills": ["Excel"]})
+    t = tailor(COMMENTY, bank, ["internationalization", "telecommunications"], ["Excel"])
+    assert t.tex.count(r"\item {\language=255 \small\textbf{") == 2
+    check_markers(t.tex)
+    again = tailor(t.tex, bank, ["telecommunications"], [])  # re-tailoring doesn't stack the switch
+    assert r"\language=255 \language=255" not in again.tex

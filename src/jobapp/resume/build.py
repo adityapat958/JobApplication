@@ -43,6 +43,7 @@ def check_markers(tex: str) -> None:
             raise ValueError("a SKILLS block has no '\\item {…\\textbf{Label:} …}' line inside")
 
 
+NOHYPH = "\\language=255 "
 # \item {\small\textbf{Core Competencies:} a, b, c}
 _ITEM = re.compile(r"(?P<indent>[ \t]*)\\item\s*\{(?P<pre>[^{}]*?\\textbf\{(?P<label>[^{}]*)\})(?P<body>.*?)\}[ \t]*(?:\n|$)",
                    re.S)
@@ -121,7 +122,10 @@ def choose(matched: list[str], original: list[str], bank_items: list[str], budge
 
 
 def render_item(block: Block, items: list[str], width: int = 92) -> str:
-    head = f"{block.indent}\\item {{{block.pre}"
+    # no hyphenation in keyword lines ("statis-/tics" reads as two words to an ATS): language 255
+    # has no patterns; it is local to the group, so the rest of the resume hyphenates as before
+    pre = block.pre if NOHYPH in block.pre else NOHYPH + block.pre
+    head = f"{block.indent}\\item {{{pre}"
     lines, cur = [], ""
     body_indent = block.indent + "    "
     for i, kw in enumerate(items):

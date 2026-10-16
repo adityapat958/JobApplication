@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from docx_factory import simple_resume
+from docx_factory import builder_resume, simple_resume
 from jobapp.cli import app
 from jobapp.resume import docx_import as di
 from jobapp.resume import tex as texmod
@@ -180,3 +180,60 @@ def test_cli_agent_flow(profile, docx):
     di.candidate_path().write_text(CORRECT)
     r = runner.invoke(app, ["resume", "import", "--accept"])
     assert r.exit_code == 0 and "resume.tex" in r.output
+
+
+# ── resume-builder .docx (real-world pattern: table skills, U+2011, CO₂, hidden tracker) ──
+BUILDER_BODY = r"""
+\begin{center}
+    {\Large\bfseries Sam Sample}\\[2pt]
+    {\small Data Analytics ~|~ Optimization}\\[1pt]
+    {\small Oslo ~|~ sam-sample-123 on Linkedin.com/in/sam-sample-123}
+\end{center}
+\section{Summary}
+{\small\textbf{Analyst who models CO\textsubscript{2} transport networks.}}
+\section{Skills}
+\begin{itemize}[leftmargin=0in, label={}, itemsep=2pt]
+    % <<SKILLS-TECH>>
+    \item {\small\textbf{Programming:} Python, SQL}
+    % <<SKILLS-TECH-END>>
+    % <<SKILLS-CORE>>
+    \item {\small\textbf{Domain:} supply-chain analytics}
+    % <<SKILLS-CORE-END>>
+\end{itemize}
+\section{Experience}
+\expentry{}{10/2026 -- Present}{Analyst}
+\begin{itemize}
+    \item Cut cost by 12\% with a MILP model
+\end{itemize}
+\end{document}
+"""
+
+
+def _builder_tex():
+    tpl = (Path(di.paths.examples_profile()) / "resume" / "resume.tex").read_text()
+    return tpl[:tpl.index("% ── Header")] + BUILDER_BODY
+
+
+def test_builder_docx_drops_invisible_text(tmp_path, monkeypatch):
+    src = builder_resume(tmp_path / "b.docx")
+    for pandoc in (True, False):
+        if not pandoc:
+            monkeypatch.setattr(di, "which", lambda name: None)
+        ex = di.extract(src)
+        for text in (ex.plain, ex.markdown):
+            assert "TRK" not in text and "0a1b2c3d" not in text and "secretword" not in text
+            assert "Summary" in text and "Domain" in text  # white-on-dark heading + table kept
+        assert ex.layout["hidden_text_removed"].startswith("2 invisible")
+    assert ex.layout["section_order"] == ["Summary", "Skills", "Experience"]  # custom *heading* style
+
+
+def test_strip_invisible_noop_returns_same_file(tmp_path, docx):
+    assert di.strip_invisible(docx, tmp_path) == (docx, [])
+
+
+@needs_tex
+def test_builder_docx_verify_passes(profile, tmp_path):
+    di.prepare(builder_resume(tmp_path / "b.docx"))
+    di.candidate_path().write_text(_builder_tex())
+    rep = di.verify()
+    assert rep.ok, rep.summary()

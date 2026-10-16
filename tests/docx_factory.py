@@ -62,3 +62,42 @@ def simple_resume(path):
     para(doc, "Tracked rental prices across 15 districts", style="List Bullet")
     doc.save(path)
     return path
+
+
+def _shade(el_pr, fill):
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:fill"), fill)
+    el_pr.append(shd)
+
+
+def builder_resume(path):
+    """Resume-builder style .docx: skills in a table, custom heading style, spacer paragraphs,
+    U+2011 hyphens, CO₂ subscript, white-on-dark heading (visible) and invisible tracker text."""
+    from docx.enum.style import WD_STYLE_TYPE
+    from docx.shared import RGBColor
+    doc = Document()
+    doc.styles.add_style("div_heading", WD_STYLE_TYPE.PARAGRAPH)
+    para(doc, ("b", "Sam Sample"))
+    para(doc, "Data Analytics | Optimization")
+    for _ in range(3):
+        para(doc, "\u00a0")                                   # spacer paragraphs
+    para(doc, "Oslo | sam\u2011sample\u2011123 on Linkedin.com/in/sam\u2011sample\u2011123")
+    h = para(doc, "Summary", style="div_heading")
+    h.runs[0].font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)       # white text on a dark band: visible
+    _shade(h._p.get_or_add_pPr(), "394D6B")
+    para(doc, ("b", "Analyst who models CO"), ("b", "\u2082"), ("b", " transport networks."))
+    para(doc, "Skills", style="div_heading")
+    cell = doc.add_table(rows=1, cols=1).cell(0, 0)
+    cell.paragraphs[0].add_run("\u2022 Programming: Python, SQL").bold = True
+    cell.add_paragraph().add_run("\u2022 Domain: supply\u2011chain analytics").bold = True
+    para(doc, "Experience", style="div_heading")
+    p = para(doc, ("b", "Analyst"), ", 10/2026 - Present")
+    hidden = p.add_run(" secretword")
+    hidden.font.hidden = True                                   # w:vanish
+    para(doc, "Cut cost by 12% with a MILP model", style="List Bullet")
+    t = para(doc, "#TRK#0a1b2c3d-feed")
+    t.runs[0].font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)       # white on white: invisible
+    doc.save(path)
+    return path

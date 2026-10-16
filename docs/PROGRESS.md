@@ -202,3 +202,35 @@ PHASE 8: DONE
 - Open issues: two-column PDFs (layout text interleaves columns; diff still works, prompt markdown is harder
   to read); PDFs without a ToUnicode map extract garbage → word gate fails (message could say so);
   `stable`/`v0.1.0` untouched.
+
+## fix/docx-real-world — real Word resume (resume-builder .docx)
+- Real-world test #2 as the user's agent on a real 3-page Word resume made with an online resume builder
+  (data only in `~/.jobapp-test/`, nothing in the repo): skills in a 1-cell table (4 lines), 4 spacer
+  paragraphs, U+2011 hyphens, CO₂ subscript, a professional-summary section, custom heading styles,
+  dates like "10/2026 - Present", no hyperlinks.
+  - Round 1: ✘ words — 6 "missing" tokens were an invisible tracking code (`#XXX#<uuid>`, white text in a
+    1pt-high paragraph) the builder appends. Not resume content; an agent can't fix it by editing the
+    .tex → code bug. Fix: `strip_invisible()` removes `w:vanish` runs and white-on-white runs (white text
+    with no dark run/paragraph/cell shading) from a temp copy before pandoc/python-docx; layout facts say
+    `hidden_text_removed: N`. Re-prepare → same .tex passed all 5 gates on round 1.
+  - Table, U+2011 (→ `-`), CO\textsubscript{2}, summary, spacers: all fine for the gates; the prompt had no
+    explicit rule for them (an agent hits "Unicode character not set up" compile errors) → added rules.
+  - `section_order` was empty (style `div_document_div_heading`) → any style containing "heading" counts.
+  - Skills markers: rule 4.4 "first conceptual/domain line" made the agent put CORE on the "Domain:" line;
+    tailoring then filled "Domain:" with generic competencies. Rule rewritten (CORE = first methods/
+    competencies line; narrow lines like Domain/Languages are poor CORE/TECH). Markers moved, re-verified.
+  - Page fit: content fits 2 pages even at 12pt; 3 pages reached via spacing knobs only. Prompt now asks
+    for a few lines of slack on the last page.
+- Build: keyword lines were hyphenated ("statis-"/"tics" = two words to an ATS). Tailored Skills items now
+  start with `\language=255 ` (no patterns, local to the item group) → no hyphenation there; output stays
+  parseable/idempotent.
+- Poll (4 LinkedIn + 4 FINN searches, Norway data/optimization roles): linkedin 99 fetched / 46 kept,
+  finn 229 / 18 kept (3 LinkedIn 429s, retried OK). Top 3 match 67% / 62% / 50%; tailored PDFs 3 pages
+  each (= original), Skills lines correct.
+- Tests: 230 passed, 3 deselected (live). New: fake resume-builder .docx (`builder_resume`: table skills,
+  U+2011, CO₂, spacers, white-on-dark heading kept, vanish + white-on-white tracker dropped) — extraction
+  with and without pandoc, no-op copy, full verify pass; build: no hyphenation in keyword lines.
+- Open issues: same job on FINN and LinkedIn is listed twice (no cross-source dedup); one FINN ad parsed
+  the title into the company field; "missing keywords" can include a contact person's name; match % depends
+  on bank granularity (aliases onto one keyword count once) — a `match_only` keyword section would help;
+  summary paragraphs keep the template's paragraph indent.
