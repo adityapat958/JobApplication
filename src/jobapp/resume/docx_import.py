@@ -485,7 +485,10 @@ def verify_tex(tex: str, source_plain: str, source_urls: set[str], target_pages:
     # 2. pages
     if pdf:
         n = texmod.page_count(pdf)
-        rep.gates.append(Gate("Page count", n == target_pages, f"{n} page(s), target {target_pages}"))
+        ok = n <= target_pages
+        detail = f"{n} page(s), source has {target_pages}" + ("" if ok else
+                 f" — {n - target_pages} page(s) too many: tighten the spacing knobs (never cut content)")
+        rep.gates.append(Gate("Page count", ok, detail))
         # 3. content
         missing, extra = content_diff(source_plain, pdf_text(pdf))
         rep.missing, rep.extra = missing, extra

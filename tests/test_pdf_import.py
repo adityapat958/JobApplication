@@ -144,7 +144,28 @@ def test_verify_pdf_page_count(profile, pdf):
     di.candidate_path().write_text(CORRECT.replace(r"\end{document}", r"\newpage\mbox{}\end{document}"))
     rep = di.verify()
     g = {g.name: g for g in rep.gates}["Page count"]
-    assert not g.ok and "2 page(s), target 1" in g.detail
+    assert not g.ok and "2 page(s), source has 1" in g.detail and "too many" in g.detail
+    assert "Page count: 2 page(s), source has 1" in di.fix_report_path().read_text()
+
+
+@needs_tex
+def test_verify_fewer_pages_than_source_passes(profile, pdf):
+    di.prepare(pdf)
+    meta = di.load_meta()
+    meta["target_pages"] = 2  # source had 2 pages; a 1-page conversion is fine
+    di._save_meta(meta)
+    di.candidate_path().write_text(CORRECT)
+    rep = di.verify()
+    g = {g.name: g for g in rep.gates}["Page count"]
+    assert g.ok and "1 page(s), source has 2" in g.detail
+    assert rep.ok
+
+
+def test_prompt_page_budget_never_pads():
+    raw = (Path(__file__).parents[1] / "prompts" / "docx_to_latex.md").read_text()
+    assert "at most {{TARGET_PAGES}} page(s)" in raw
+    assert "Never pad spacing" in raw and "default spacing" in raw
+    assert "Aim for exactly" not in raw and "open up the spacing" not in raw
 
 
 @needs_tex

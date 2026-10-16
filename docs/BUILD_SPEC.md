@@ -102,7 +102,7 @@ Registered via entry in `jobapp/sources/__init__.py`. Each source has offline te
 - Two modes, no API key needed in the default:
   - **agent mode (default)**: `jobapp resume import x.docx --prepare` writes `import/prompt.md`; the Claude agent (Code or Desktop) writes `import/resume.tex`; `jobapp resume import --verify` runs the gates and on failure writes `import/fix_report.md` for the agent to retry (max 3).
   - **api mode**: if `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` in keyring/env, do the loop automatically.
-- Verification gates (code): compiles; page count == target; token-multiset diff of `pdftotext` (or `pypdf`) vs docx text is empty modulo allowlist; URL set equal; marker pairs present and build dry-run OK.
+- Verification gates (code): compiles; page count <= source (fewer is fine); token-multiset diff of `pdftotext` (or `pypdf`) vs docx text is empty modulo allowlist; URL set equal; marker pairs present and build dry-run OK.
 - Test: generate a fake .docx with python-docx in tests; run agent-mode verify against a hand-written correct .tex fixture (pass) and a reworded one (fail with the reworded tokens listed).
 
 ## 8. Connectors (interface only in v0.1)

@@ -110,14 +110,15 @@ target_pages: {{TARGET_PAGES}}
   block before the CORE block. Report this in the mapping notes.
 
 **4.5 Layout fit**
-- Aim for exactly {{TARGET_PAGES}} page(s). Adjust ONLY the template's marked knobs
-  (`% ← FONT SIZE`, margins, `\titlespacing`, `itemsep`/`topsep`, `\vspace` between entries),
-  within these limits: font 9.5–11pt, margins 0.3–0.75in.
+- Page budget: at most {{TARGET_PAGES}} page(s) (the source's count). Fewer pages is fine.
+  Start with the template's default spacing and font. Never pad spacing (bigger font, wider gaps,
+  `\vspace`) to reach the source's page count — a shorter resume is better than a stretched one.
+- Only if the output would be MORE than {{TARGET_PAGES}} page(s): tighten ONLY the template's marked
+  knobs (`% ← FONT SIZE`, margins, `\titlespacing`, `itemsep`/`topsep`, `\vspace` between entries),
+  within these limits: font 9.5–11pt, margins 0.3–0.75in, until it fits.
 - Paper size: match `page_size_in` from the layout facts on the `\documentclass` line
   (8.5 x 11 -> `letterpaper`, 8.27 x 11.69 -> `a4paper`).
-- Never fix length by changing the content. If the content is short of the target even at 11pt,
-  open up the spacing knobs; leave a few lines of slack on the last page (tailoring can shorten
-  the Skills lines by a line or two).
+- Never fix length by changing the content.
 
 **4.6 Things that don't fit**
 - A section with no matching macro (Publications, Awards, Certifications, Languages):
@@ -148,7 +149,7 @@ mapping_notes:
 - compile error at line 88: Missing $ inserted (unescaped _ in "ros_bridge")
 - missing words vs source: ["Kubernetes", "2.3x"]
 - extra words not in source: ["Leveraged"]
-- pages: 3 (target 2)
+- Page count: 3 page(s), source has 2 — 1 page(s) too many: tighten the spacing knobs (never cut content)
 Fix ONLY these issues; keep everything else identical to your previous output.
 -->
 
@@ -156,7 +157,7 @@ Fix ONLY these issues; keep everything else identical to your previous output.
 
 ## Verification gates (code, not LLM). All must pass before the .tex is accepted
 1. **Compiles**: `latexmk -pdf` exits 0 and the log has no `Overfull \hbox` > 5pt.
-2. **Page count** = target_pages.
+2. **Page count** <= target_pages (fewer is fine; only more fails).
 3. **Content diff**: normalise both sides (`pdftotext` of the new PDF vs the source text — pandoc plain
    text for Word, `pdftotext` for PDF: NFKC (splits ligatures), lowercase, strip punctuation, `|`
    separators and bullet glyphs). Token multiset diff must be empty, apart from tokens on an allowlist
