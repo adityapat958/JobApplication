@@ -39,6 +39,7 @@ def test_poll_inserts_filters_and_fetches_jd(profile):
     assert all(h["hidden_reason"] for h in hidden)
     dnv = db.get_job(conn, [j["id"] for j in visible if j["source_id"] == "4473638585"][0])
     assert dnv["description"] and dnv["job_type"] == "fulltime" and dnv["language"] == "en"
+    assert dnv["match_pct"] is not None and "Data Analysis" in dnv["matched"]  # enrich step scored it
     # JD fetched only for kept jobs
     jd_calls = [c for c in calls if "jobPosting/" in c]
     assert len(jd_calls) == li.kept

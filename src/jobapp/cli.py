@@ -224,6 +224,23 @@ def mark(job_id: str, status: str):
 
 
 @app.command()
+def rescore():
+    """Re-score every saved job against your keyword list (after you edit keywords.yaml)."""
+    from . import db
+    from .resume.matching import Matcher
+    cfg = _cfg()
+    try:
+        m = Matcher.from_config(cfg)
+    except ValueError as e:
+        raise UserError(str(e))
+    conn = _conn()
+    rows = db.list_jobs(conn, include_hidden=True)
+    for r in rows:
+        m.score_and_save(conn, r)
+    con.print(f"Re-scored {len(rows)} job(s).")
+
+
+@app.command()
 def build(job_id: str, reveal: bool = typer.Option(False, "--reveal", help="Show the PDF in Finder/file manager.")):
     """Build a tailored resume PDF for one job."""
     from .resume.service import build_for_job
