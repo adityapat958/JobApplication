@@ -11,6 +11,7 @@ from typing import Any, Iterable
 from .. import paths
 from ..filters import title_score
 from ..models import STATUSES, JobPosting
+from . import dedupe as dd
 
 MIGRATIONS = Path(__file__).parent / "migrations"
 DONE_STATUSES = {"applied", "interview", "rejected", "offer"}
@@ -39,12 +40,25 @@ def schema_version(conn: sqlite3.Connection) -> int:
     return conn.execute("PRAGMA user_version").fetchone()[0]
 
 
+def _post_migrate(conn: sqlite3.Connection, v: int) -> None:
+    """Python data steps that run inside a migration's transaction."""
+    if v == 2:
+        from .dedupe import dedupe_all
+        dedupe_all(conn)
+
+
 def migrate(conn: sqlite3.Connection) -> int:
     cur = schema_version(conn)
     for v, f in migrations():
         if v > cur:
-            with conn:
-                conn.executescript(f"BEGIN;\n{f.read_text()}\nPRAGMA user_version = {v};\nCOMMIT;")
+            conn.executescript(f"BEGIN;\n{f.read_text()}\n")
+            try:
+                _post_migrate(conn, v)
+                conn.execute(f"PRAGMA user_version = {v}")
+                conn.execute("COMMIT")
+            except BaseException:
+                conn.execute("ROLLBACK")
+                raise
             cur = v
     return cur
 
@@ -103,6 +117,8 @@ def upsert_job(conn: sqlite3.Connection, job: JobPosting, ts: str | None = None)
             + ", ".join(vals) + ") VALUES (?,?,?,?,?,?,?," + ",".join("?" * len(vals)) + ")",
             (job.id, job.source, job.source_id, ts, ts, job.description, job.language, *vals.values()),
         )
+        dd.set_key(conn, job.id)
+        dd.relink_job(conn, job.id)
         return job.id, True
     sets = {k: v for k, v in vals.items() if v not in (None, "") or k == "raw"}
     sets["last_seen_at"] = ts
@@ -112,6 +128,8 @@ def upsert_job(conn: sqlite3.Connection, job: JobPosting, ts: str | None = None)
         sets["language"] = job.language
     conn.execute("UPDATE jobs SET " + ", ".join(f"{k}=?" for k in sets) + " WHERE id=?",
                  (*sets.values(), existing["id"]))
+    dd.set_key(conn, existing["id"])
+    dd.relink_job(conn, existing["id"])
     return existing["id"], False
 
 
@@ -120,16 +138,40 @@ def get_job(conn: sqlite3.Connection, job_id: str) -> dict | None:
     if row is None and job_id:
         rows = conn.execute("SELECT * FROM jobs WHERE id LIKE ?", (job_id + "%",)).fetchall()
         row = rows[0] if len(rows) == 1 else None
-    return row_to_dict(row)
+    d = row_to_dict(row)
+    if d:
+        d["also_on"] = also_on(conn, [d["id"]]).get(d["id"], [])
+    return d
+
+
+def also_on(conn: sqlite3.Connection, ids: list[str]) -> dict[str, list[dict]]:
+    """primary id -> [{source, url, id}] of its hidden cross-source duplicates."""
+    out: dict[str, list[dict]] = {}
+    if not ids:
+        return out
+    q = "SELECT id, source, url, apply_url, duplicate_of FROM jobs WHERE duplicate_of IS NOT NULL"
+    if len(ids) <= 500:
+        q += " AND duplicate_of IN (" + ",".join("?" * len(ids)) + ")"
+        args = ids
+    else:
+        args = []
+    want = set(ids)
+    for r in conn.execute(q + " ORDER BY source", args):
+        if r["duplicate_of"] in want:
+            out.setdefault(r["duplicate_of"], []).append({"source": r["source"], "url": r["url"] or r["apply_url"],
+                                                          "id": r["id"]})
+    return out
 
 
 def list_jobs(conn: sqlite3.Connection, *, status: str | None = None, min_match: float | None = None,
               include_hidden: bool = False, only_hidden: bool = False, query: str | None = None,
               source: str | None = None, limit: int | None = None, order: str = "newest",
-              title_include: list[str] | None = None) -> list[dict]:
+              title_include: list[str] | None = None, include_duplicates: bool = False) -> list[dict]:
     """title_include (filters.title_include) adds a title_score to each row; order="match" sorts by
     match_pct desc, then title_score desc, then posted desc."""
     where, args = [], []
+    if not include_duplicates:
+        where.append("j.duplicate_of IS NULL")  # cross-source copies show as "also on" on the primary
     if status:
         where.append("j.status=?"); args.append(status)
     if min_match is not None:
@@ -155,8 +197,10 @@ def list_jobs(conn: sqlite3.Connection, *, status: str | None = None, min_match:
     if limit and order != "match":
         sql += f" LIMIT {int(limit)}"
     rows = [row_to_dict(r) for r in conn.execute(sql, args)]
+    extra = also_on(conn, [r["id"] for r in rows])
     for r in rows:
         r["title_score"] = title_score(r.get("title"), title_include)
+        r["also_on"] = extra.get(r["id"], [])
     if order == "match":
         rows.sort(key=lambda r: r.get("posted_at") or r.get("first_seen_at") or "", reverse=True)
         rows.sort(key=lambda r: (r["match_pct"] if r.get("match_pct") is not None else -1, r["title_score"]),
@@ -176,6 +220,7 @@ def set_status(conn: sqlite3.Connection, job_id: str, status: str) -> dict:
     done = 1 if status in DONE_STATUSES else 0
     conn.execute("UPDATE jobs SET status=?, done=?, done_at=CASE WHEN ?=1 THEN COALESCE(done_at, ?) ELSE NULL END "
                  "WHERE id=?", (status, done, done, now(), job_id))
+    dd.relink_job(conn, job_id)
     return get_job(conn, job_id)
 
 
@@ -186,6 +231,7 @@ def set_done(conn: sqlite3.Connection, job_id: str, done: bool) -> dict:
 
 def set_notes(conn: sqlite3.Connection, job_id: str, notes: str) -> None:
     conn.execute("UPDATE jobs SET notes=? WHERE id=?", (notes, job_id))
+    dd.relink_job(conn, job_id)
 
 
 def set_description(conn: sqlite3.Connection, job_id: str, text: str | None, *, manual: bool) -> None:
@@ -194,6 +240,7 @@ def set_description(conn: sqlite3.Connection, job_id: str, text: str | None, *, 
         conn.execute("UPDATE jobs SET description=?, jd_saved_at=? WHERE id=?", (text, now(), job_id))
     else:
         conn.execute("UPDATE jobs SET description=? WHERE id=? AND jd_saved_at IS NULL", (text, job_id))
+    dd.relink_job(conn, job_id)
 
 
 def set_match(conn: sqlite3.Connection, job_id: str, pct: float, matched: list, missing: list) -> None:
@@ -204,6 +251,7 @@ def set_match(conn: sqlite3.Connection, job_id: str, pct: float, matched: list, 
 def set_hidden(conn: sqlite3.Connection, job_id: str, hidden: bool, reason: str = "") -> None:
     conn.execute("UPDATE jobs SET hidden=?, hidden_reason=? WHERE id=?",
                  (1 if hidden else 0, reason if hidden else None, job_id))
+    dd.relink_job(conn, job_id)
 
 
 def start_run(conn: sqlite3.Connection, source: str) -> int:
@@ -232,6 +280,9 @@ def last_build(conn: sqlite3.Connection, job_id: str) -> dict | None:
 
 def counts(conn: sqlite3.Connection) -> dict:
     total = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-    hidden = conn.execute("SELECT COUNT(*) FROM jobs WHERE hidden=1").fetchone()[0]
-    by_status = {r[0]: r[1] for r in conn.execute("SELECT status, COUNT(*) FROM jobs GROUP BY status")}
-    return {"total": total, "hidden": hidden, "visible": total - hidden, "by_status": by_status}
+    dups = conn.execute("SELECT COUNT(*) FROM jobs WHERE duplicate_of IS NOT NULL").fetchone()[0]
+    hidden = conn.execute("SELECT COUNT(*) FROM jobs WHERE hidden=1 AND duplicate_of IS NULL").fetchone()[0]
+    by_status = {r[0]: r[1] for r in conn.execute(
+        "SELECT status, COUNT(*) FROM jobs WHERE duplicate_of IS NULL GROUP BY status")}
+    return {"total": total, "hidden": hidden, "duplicates": dups, "visible": total - hidden - dups,
+            "by_status": by_status}

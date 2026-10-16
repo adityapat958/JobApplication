@@ -116,7 +116,9 @@ def run_poll(cfg, conn, *, only: str | None = None, dry_run: bool = False, fetch
                     if matcher and (is_new or need_jd):
                         matcher.score_and_save(conn, row)
                     if is_new:
-                        notify_added(cfg, db.get_job(conn, jid))
+                        added = db.get_job(conn, jid)
+                        if not added.get("duplicate_of"):  # same job already known from another site
+                            notify_added(cfg, added)
             except sources.NeedsLogin as e:
                 res.errors.append(str(e))
             except (HttpError, ValueError) as e:

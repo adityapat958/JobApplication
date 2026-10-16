@@ -110,7 +110,7 @@ function render(){
     if(j.hidden)tr.className='hid';else if(j.done)tr.className='done';
     tr.innerHTML=`<td class="t">${esc(j.company)}</td>
       <td class="t">${esc(j.title)}${j.hidden?`<div class="why">hidden: ${esc(j.hidden_reason)}</div>`:''}<div class="kw">${esc(kw)}</div></td>
-      <td>${esc(j.location)}</td><td class="kw">${esc(j.source)}</td>
+      <td>${esc(j.location)}</td><td class="kw">${esc(j.source)}${(j.also_on||[]).length?`<br><span title="same job on another site">also on: ${(j.also_on||[]).map(a=>`<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.source)}</a>`).join(', ')}</span>`:''}</td>
       <td style="white-space:nowrap" title="${esc(posted(j))}">${ageLabel(j)}</td>
       <td style="white-space:nowrap">${m}</td>
       <td><select class="st" onchange="setStatus('${j.id}',this)">${opts}</select></td>

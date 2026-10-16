@@ -155,7 +155,7 @@ def list_cmd(status: Optional[str] = typer.Option(None, "--status"),
     if as_json:
         print(json.dumps([{k: r[k] for k in ("id", "company", "title", "location", "source", "posted_at",
                                               "match_pct", "title_score", "status", "hidden_reason", "url")}
-                          for r in rows],
+                          | {"also_on": [a["source"] for a in r["also_on"]]} for r in rows],
                          indent=2, ensure_ascii=False))
         return
     if not rows:
@@ -169,7 +169,8 @@ def list_cmd(status: Optional[str] = typer.Option(None, "--status"),
     for r in rows:
         posted = (r["posted_at"] or r["first_seen_at"] or "")[:10]
         match = "" if r["match_pct"] is None else f"{r['match_pct']:.0f}%"
-        cells = [r["id"], r["company"] or "", r["title"] or "", r["location"] or "", r["source"], posted,
+        src = r["source"] + "".join(f" +{a['source']}" for a in r.get("also_on") or [])
+        cells = [r["id"], r["company"] or "", r["title"] or "", r["location"] or "", src, posted,
                  match, r["status"]]
         if hidden:
             cells.append(r["hidden_reason"] or "")
@@ -196,6 +197,10 @@ def show(job_id: str):
         con.print(f"  match: {j['match_pct']:.0f}%")
         con.print(f"  matched: {', '.join(j['matched']) or '-'}")
         con.print(f"  missing: {', '.join(j['missing']) or '-'}")
+    for a in j.get("also_on") or []:
+        con.print(f"  also on: {a['source']}  {a['url'] or ''}")
+    if j.get("duplicate_of"):
+        con.print(f"  same job as {j['duplicate_of']} (listed there; this copy is hidden)")
     if j.get("hidden"):
         con.print(f"  hidden by filters: {j['hidden_reason']}")
     if j.get("notes"):
@@ -238,7 +243,7 @@ def rescore():
     except ValueError as e:
         raise UserError(str(e))
     conn = _conn()
-    rows = db.list_jobs(conn, include_hidden=True)
+    rows = db.list_jobs(conn, include_hidden=True, include_duplicates=True)
     for r in rows:
         m.score_and_save(conn, r)
     con.print(f"Re-scored {len(rows)} job(s).")

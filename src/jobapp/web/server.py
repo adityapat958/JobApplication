@@ -24,7 +24,7 @@ HERE = Path(__file__).parent
 ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 LIST_FIELDS = ("id", "source", "company", "title", "location", "job_type", "posted_at", "first_seen_at",
                "match_pct", "title_score", "matched", "status", "done", "hidden", "hidden_reason", "url", "apply_url",
-               "jd_saved_at", "notes")
+               "jd_saved_at", "notes", "also_on")
 
 _refresh = {"running": False, "last": None, "summary": "", "error": None}
 _refresh_lock = threading.Lock()

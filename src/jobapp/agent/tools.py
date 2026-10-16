@@ -89,6 +89,8 @@ def list_jobs(status: str | None = None, min_match: float | None = None, search:
     jobs = []
     for r in rows:
         j = {k: r.get(k) for k in LIST_KEYS}
+        if r.get("also_on"):
+            j["also_on"] = [a["source"] for a in r["also_on"]]
         if show_hidden:
             j["why_hidden"] = r.get("hidden_reason")
         if r.get("description") is None:
