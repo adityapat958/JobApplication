@@ -122,3 +122,16 @@ PHASE 5: DONE
 - Tests: MCP stdio client lists all 9 tools + calls list_jobs; tool functions; report-bug redaction + zip contents.
   177 offline passed.
 PHASE 6: DONE
+
+## Phase 7 — feat/macos
+- `schedule.py`: macOS → writes `~/Library/LaunchAgents/com.jobapplication.poll.plist` (StartCalendarInterval per
+  time, sorted/deduped; ProgramArguments = venv python `-m jobapp.cli_entry poll`; JOBAPP_HOME + PATH incl.
+  /opt/homebrew/bin and /Library/TeX/texbin; log to logs/schedule.log) and `launchctl load -w` (unload first on
+  reinstall); `remove`, `status` (launchctl list). Linux → prints crontab lines tagged `# jobapplication-poll`,
+  never edits the crontab.
+- `secrets.py`: env → keyring (macOS Keychain) → `$JOBAPP_HOME/.env` (chmod 600). CLI `jobapp key set|status`.
+- `platform.py`: reveal = `open -R` (mac) / `xdg-open <dir>` (linux) / explorer (windows); dashboard + `build --reveal`.
+- CLI output no longer hard-wraps (paths and crontab lines stay copy-pastable).
+- Tests: plist generation (plistlib round-trip), crontab lines, mac install/reinstall/status/remove with mocked
+  launchctl, linux install never calls subprocess, reveal commands, keyring + .env fallback. 187 offline passed.
+PHASE 7: DONE

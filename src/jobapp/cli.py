@@ -23,8 +23,8 @@ app.add_typer(config_app, name="config")
 app.add_typer(resume_app, name="resume")
 app.add_typer(schedule_app, name="schedule")
 
-con = Console()
-err = Console(stderr=True)
+con = Console(soft_wrap=True)
+err = Console(stderr=True, soft_wrap=True)
 
 
 class UserError(Exception):
@@ -329,26 +329,50 @@ def resume_import(docx: Optional[str] = typer.Argument(None, help="Your Word res
     con.print(f"Next: write the LaTeX to {di.candidate_path()} and run 'jobapp resume import --verify'.")
 
 
+# ── API keys (only for automatic Word import) ─────────────
+key_app = typer.Typer(no_args_is_help=True, help="Store API keys safely (Keychain on a Mac).")
+app.add_typer(key_app, name="key")
+
+
+@key_app.command("set")
+def key_set(name: str = typer.Argument(..., help="ANTHROPIC_API_KEY or GEMINI_API_KEY")):
+    """Save an API key (typed hidden) in the system keychain."""
+    from . import secrets
+    if name not in secrets.names():
+        raise UserError(f"Unknown key name. Use one of: {', '.join(secrets.names())}")
+    value = typer.prompt(f"Paste your {name}", hide_input=True).strip()
+    where = secrets.set(name, value)
+    con.print(f"Saved {name} in {where}.")
+
+
+@key_app.command("status")
+def key_status():
+    """Show which API keys are available (never prints them)."""
+    from . import secrets
+    for n in secrets.names():
+        con.print(f"{n}: {'set' if secrets.get(n) else 'not set'}")
+
+
 # ── schedule ──────────────────────────────────────────────
 @schedule_app.command("install")
 def schedule_install():
     """Search for jobs automatically at the times in config.yaml."""
     from . import schedule as s
-    con.print(s.install(_cfg()))
+    print(s.install(_cfg()))
 
 
 @schedule_app.command("remove")
 def schedule_remove():
     """Stop automatic searches."""
     from . import schedule as s
-    con.print(s.remove())
+    print(s.remove())
 
 
 @schedule_app.command("status")
 def schedule_status():
     """Show whether automatic searches are on."""
     from . import schedule as s
-    con.print(s.status(_cfg()))
+    print(s.status(_cfg()))
 
 
 def main() -> None:
