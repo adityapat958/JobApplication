@@ -64,6 +64,7 @@ target_pages: {{TARGET_PAGES}}
   email that is plain text in the source stays plain text. A project whose title is a link ->
   `\projentry{Title}{url}{...}`.
 - Do not add anything that isn't in the source: no summary, no skills, no metrics, no links.
+  (A summary/profile the source *does* have is content: keep it, see 4.6.)
   If the template has a slot the source can't fill, delete that slot. Don't fill it.
 
 **4.2 Structure mapping**
@@ -81,6 +82,12 @@ target_pages: {{TARGET_PAGES}}
   hyphen is clearly a line break (`end-to-` + `end` stays `end-to-end`). Ligatures (ﬁ ﬂ ﬀ) -> plain letters.
 - Smart quotes -> ``` `` ``` and `''`. Date ranges use `--`. Leave hyphens inside words alone.
 - Accented letters: keep them as UTF-8 (the template loads `inputenc`/`T1`).
+- Characters `inputenc` can't typeset (compile error "Unicode character ... not set up"):
+  non-breaking hyphen U+2011 / U+2010 -> `-`; non-breaking space -> a normal space or `~`;
+  subscript/superscript digits (CO₂, m²) -> `CO\textsubscript{2}`, `m\textsuperscript{2}`.
+- Small caps (`[text]{.smallcaps}`): write the words in their source case; `\textsc{}` only if not bold
+  (Latin Modern has no bold small caps).
+- Empty or whitespace-only paragraphs (spacers) are layout, not content: drop them.
 
 **4.4 Skills markers (required for the keyword-swap pipeline)**
 - Wrap each Skills line in the matching marker pair, exactly like this:
@@ -105,12 +112,17 @@ target_pages: {{TARGET_PAGES}}
   within these limits: font 9.5–11pt, margins 0.3–0.75in.
 - Paper size: match `page_size_in` from the layout facts on the `\documentclass` line
   (8.5 x 11 -> `letterpaper`, 8.27 x 11.69 -> `a4paper`).
-- Never fix length by changing the content.
+- Never fix length by changing the content. If the content is short of the target even at 11pt,
+  open up the spacing knobs; leave a few lines of slack on the last page (tailoring can shorten
+  the Skills lines by a line or two).
 
 **4.6 Things that don't fit**
 - A section with no matching macro (Publications, Awards, Certifications, Languages):
   use `\section{<name>}` + a plain `itemize`. Don't define new macros.
+- A summary / profile / objective section: `\section{<source name>}` + its paragraph(s) as plain text,
+  keeping the source's bold.
 - Tables in the source: flatten to bullets or a single line. Never use `tabular` (ATS can't read it).
+  A table that holds the skills is the Skills section: one `\item` per skills line, rule 4.4 applies.
 - Images, icons, text boxes, columns: drop them and list them in the mapping notes.
 
 ### 5. Output format

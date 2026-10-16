@@ -12,6 +12,7 @@ import json
 import re
 import shutil
 import subprocess
+import tempfile
 import unicodedata
 import zipfile
 from collections import Counter
@@ -113,6 +114,59 @@ def _docx_fallback(docx: Path) -> tuple[str, str]:
     return "\n\n".join(md), "\n".join(plain)
 
 
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_LIGHT = {None, "", "auto", "FFFFFF"}
+
+
+def _fill(el) -> str | None:
+    shd = el.find(f"{_W}shd") if el is not None else None
+    return (shd.get(f"{_W}fill") or "").upper() if shd is not None else None
+
+
+def _invisible(run) -> bool:
+    """Hidden (w:vanish) or white-on-white text — e.g. resume-builder tracking codes."""
+    rpr = run.find(f"{_W}rPr")
+    if rpr is None:
+        return False
+    if rpr.find(f"{_W}vanish") is not None or rpr.find(f"{_W}specVanish") is not None:
+        return True
+    color = rpr.find(f"{_W}color")
+    if color is None or (color.get(f"{_W}val") or "").upper() != "FFFFFF":
+        return False
+    fills = [_fill(rpr)]
+    for anc in run.iterancestors():
+        tag = anc.tag.rsplit("}", 1)[-1]
+        if tag == "p":
+            fills.append(_fill(anc.find(f"{_W}pPr")))
+        elif tag == "tc":
+            fills.append(_fill(anc.find(f"{_W}tcPr")))
+    return all((f or "").upper() in _LIGHT for f in fills)  # no dark background behind it
+
+
+def strip_invisible(docx: Path, out_dir: Path) -> tuple[Path, list[str]]:
+    """Copy of the .docx without invisible runs (+ the removed texts). Same file if nothing hidden."""
+    from lxml import etree
+    with zipfile.ZipFile(docx) as z:
+        root = etree.fromstring(z.read("word/document.xml"))
+        removed = []
+        for r in list(root.iter(f"{_W}r")):
+            if _invisible(r):
+                text = "".join(t.text or "" for t in r.iter(f"{_W}t"))
+                if text.strip():
+                    removed.append(text.strip())
+                r.getparent().remove(r)
+        if not removed:
+            return docx, []
+        out = out_dir / docx.name
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zo:
+            for item in z.infolist():
+                data = z.read(item.filename)
+                if item.filename == "word/document.xml":
+                    data = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+                zo.writestr(item, data)
+    return out, removed
+
+
 def docx_urls(docx: Path) -> set[str]:
     with zipfile.ZipFile(docx) as z:
         names = [n for n in z.namelist() if n.startswith("word/_rels/") and n.endswith(".rels")]
@@ -170,7 +224,7 @@ def docx_layout(docx: Path) -> dict:
         style = (p.style.name or "").lower() if p.style is not None else ""
         if not t:
             continue
-        if style.startswith("heading") or (t.isupper() and len(t) < 40):
+        if "heading" in style or (t.isupper() and len(t) < 40):
             sections.append(t)
     out["section_order"] = sections
     out["tables"] = len(d.tables)
@@ -206,12 +260,17 @@ def extract(src: Path) -> Extracted:
         zipfile.ZipFile(docx).close()
     except zipfile.BadZipFile:
         raise ImportError_("That file doesn't look like a real .docx (it can't be opened).") from None
-    md = _pandoc(docx, "markdown")
-    plain = _pandoc(docx, "plain") if md is not None else None
-    used = md is not None and plain is not None
-    if not used:
-        md, plain = _docx_fallback(docx)
-    return Extracted(md, plain, docx_layout(docx), docx_pages(docx) or 1, docx_urls(docx), used)
+    with tempfile.TemporaryDirectory() as tmp:
+        clean, hidden = strip_invisible(docx, Path(tmp))
+        md = _pandoc(clean, "markdown")
+        plain = _pandoc(clean, "plain") if md is not None else None
+        used = md is not None and plain is not None
+        if not used:
+            md, plain = _docx_fallback(clean)
+        layout = docx_layout(clean)
+    if hidden:
+        layout["hidden_text_removed"] = f"{len(hidden)} invisible text run(s) (hidden or white-on-white) — not resume content"
+    return Extracted(md, plain, layout, docx_pages(docx) or 1, docx_urls(docx), used)
 
 
 def _extract_pdf(pdf: Path) -> Extracted:
