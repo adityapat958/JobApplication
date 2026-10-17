@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.3
+- Fix: the dashboard stopped working when Claude started it. `jobapp serve` ran in the foreground, so Claude's
+  command time limit killed it (or Claude waited forever). New `jobapp serve --background` starts it detached,
+  waits until it answers, opens the browser and returns; `--status` / `--stop`. Claude now always uses it.
+- Fix: if port 8765 is already in use, the dashboard picks the next free port instead of failing.
+- New MCP tool `open_dashboard` for Claude Desktop.
+- `/setup` no longer asks about Obsidian (it confused new users); connectors are set up only on request.
+
 ## v0.1.2
 **Obsidian notes (optional, off by default)**
 - `connectors.obsidian`: one note per job in your Obsidian vault (`Jobs/Full-Time`, `Jobs/Internships`,

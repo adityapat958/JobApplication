@@ -275,10 +275,23 @@ def build(job_id: str, reveal: bool = typer.Option(False, "--reveal", help="Show
 
 
 @app.command()
-def serve(port: int = typer.Option(8765, "--port"), open_browser: bool = typer.Option(True, "--open/--no-open")):
+def serve(port: int = typer.Option(8765, "--port"),
+          open_browser: bool = typer.Option(True, "--open/--no-open"),
+          background: bool = typer.Option(False, "--background", "-b",
+                                          help="Keep running after this window/command ends (use this from Claude)."),
+          stop: bool = typer.Option(False, "--stop", help="Stop a dashboard started with --background."),
+          status: bool = typer.Option(False, "--status", help="Is the dashboard running?")):
     """Open the dashboard in your browser (http://127.0.0.1:8765)."""
-    from .web.server import serve as srv
+    from .web import daemon
+    if stop:
+        con.print(daemon.stop()); return
+    if status:
+        con.print(daemon.status()); return
     _cfg()
+    if background:
+        con.print(daemon.start(port=port, open_browser=open_browser)); return
+    from .web.server import serve as srv
+    port = daemon.free_port(port)
     srv(port=port, open_browser=open_browser)
 
 

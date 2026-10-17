@@ -31,7 +31,8 @@ Always run commands from this folder with `uv run jobapp …` (or `jobapp …` i
 | make a tailored PDF | `uv run jobapp build <id>` (add `--reveal` to open the folder) |
 | record progress | `uv run jobapp mark <id> applied` (new, interested, applied, interview, rejected, offer, ignored) |
 | re-score after editing keywords | `uv run jobapp rescore` |
-| open the dashboard | `uv run jobapp serve` (http://127.0.0.1:8765, Ctrl+C to stop) |
+| open the dashboard | `uv run jobapp serve --background` (opens the browser and returns; never run plain `jobapp serve` — it blocks and is killed when your command times out) |
+| is the dashboard running? / stop it | `uv run jobapp serve --status` / `uv run jobapp serve --stop` |
 | automatic searches | `uv run jobapp schedule install` / `status` / `remove` |
 | bug report for the developer | `uv run jobapp report-bug` |
 | update database after an update | `uv run jobapp migrate` |
