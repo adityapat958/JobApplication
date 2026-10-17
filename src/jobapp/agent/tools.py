@@ -132,10 +132,7 @@ def mark_job(job_id: str, status: str) -> dict:
     j = db.get_job(conn, job_id)
     if not j:
         return {"ok": False, "error": f"No job with id '{job_id}'."}
-    old = j["status"]
-    j = db.set_status(conn, j["id"], status)
-    if status != "new" and j["hidden"]:
-        db.set_hidden(conn, j["id"], False)
+    j, old = db.mark(conn, j["id"], status)
     notify_updated(_cfg(), j, {"status": [old, status]})
     return {"ok": True, "job": f"{j['company']} — {j['title']}", "status": status}
 

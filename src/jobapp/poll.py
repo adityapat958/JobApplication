@@ -1,10 +1,11 @@
-"""Run sources → filter → save → fetch JD for kept new jobs → score → notify connectors."""
+"""Pull note edits → run sources → filter → save → fetch JD for kept new jobs → score → notify connectors."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Callable
 
 from . import db, sources
+from . import connectors
 from .connectors import notify_added
 from .filters import apply_filters
 from .http import Http, HttpError
@@ -73,6 +74,10 @@ def run_poll(cfg, conn, *, only: str | None = None, dry_run: bool = False, fetch
     http = http or Http()
     matcher = None if dry_run else _matcher(cfg)
     results = []
+    if not dry_run:
+        n = connectors.pull_all(cfg, conn)  # status edits made in notes (two-way connectors only)
+        if n:
+            say(f"Took {n} status change(s) from your notes.")
     try:
         for name in names:
             res = PollResult(name)
@@ -130,6 +135,8 @@ def run_poll(cfg, conn, *, only: str | None = None, dry_run: bool = False, fetch
                 db.finish_run(conn, run_id, res.fetched, res.new, res.errors)
         if not dry_run and not only:
             refilter_all(conn, cfg)
+        if not dry_run:
+            connectors.after_poll(cfg, conn)
     finally:
         if own_http:
             http.close()

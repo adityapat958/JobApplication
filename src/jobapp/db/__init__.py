@@ -113,9 +113,9 @@ def upsert_job(conn: sqlite3.Connection, job: JobPosting, ts: str | None = None)
                             (job.source, job.source_id)).fetchone()
     if existing is None:
         conn.execute(
-            "INSERT INTO jobs (id, source, source_id, first_seen_at, last_seen_at, description, language, "
-            + ", ".join(vals) + ") VALUES (?,?,?,?,?,?,?," + ",".join("?" * len(vals)) + ")",
-            (job.id, job.source, job.source_id, ts, ts, job.description, job.language, *vals.values()),
+            "INSERT INTO jobs (id, source, source_id, first_seen_at, last_seen_at, status_updated_at, description, "
+            "language, " + ", ".join(vals) + ") VALUES (?,?,?,?,?,?,?,?," + ",".join("?" * len(vals)) + ")",
+            (job.id, job.source, job.source_id, ts, ts, ts, job.description, job.language, *vals.values()),
         )
         dd.set_key(conn, job.id)
         dd.relink_job(conn, job.id)
@@ -218,10 +218,25 @@ def set_status(conn: sqlite3.Connection, job_id: str, status: str) -> dict:
     if status not in STATUSES:
         raise ValueError(f"status must be one of: {', '.join(STATUSES)}")
     done = 1 if status in DONE_STATUSES else 0
-    conn.execute("UPDATE jobs SET status=?, done=?, done_at=CASE WHEN ?=1 THEN COALESCE(done_at, ?) ELSE NULL END "
-                 "WHERE id=?", (status, done, done, now(), job_id))
+    ts = now()
+    conn.execute("UPDATE jobs SET status=?, done=?, done_at=CASE WHEN ?=1 THEN COALESCE(done_at, ?) ELSE NULL END, "
+                 "status_updated_at=CASE WHEN status=? THEN status_updated_at ELSE ? END WHERE id=?",
+                 (status, done, done, ts, status, ts, job_id))
     dd.relink_job(conn, job_id)
     return get_job(conn, job_id)
+
+
+def mark(conn: sqlite3.Connection, job_id: str, status: str) -> tuple[dict, str]:
+    """The user's "mark" action: set the status and un-hide a job they track. Returns (job, old status).
+    Callers then tell the connectors (connectors.notify_updated)."""
+    j = get_job(conn, job_id)
+    if not j:
+        raise KeyError(job_id)
+    j2 = set_status(conn, j["id"], status)
+    if status != "new" and j2["hidden"]:
+        set_hidden(conn, j["id"], False)  # a job you're tracking is never hidden
+        j2 = get_job(conn, j["id"])
+    return j2, j["status"]
 
 
 def set_done(conn: sqlite3.Connection, job_id: str, done: bool) -> dict:

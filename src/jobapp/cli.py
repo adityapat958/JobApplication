@@ -22,6 +22,8 @@ schedule_app = typer.Typer(no_args_is_help=True, help="Run job searches automati
 app.add_typer(config_app, name="config")
 app.add_typer(resume_app, name="resume")
 app.add_typer(schedule_app, name="schedule")
+connectors_app = typer.Typer(no_args_is_help=True, help="Send your jobs to other apps (e.g. Obsidian notes).")
+app.add_typer(connectors_app, name="connectors")
 
 con = Console(soft_wrap=True)
 err = Console(stderr=True, soft_wrap=True)
@@ -82,6 +84,12 @@ def config_validate():
     except config_mod.ConfigError as e:
         con.print("[red]Your settings have a problem:[/red]")
         for p in e.problems:
+            con.print(f"  - {p}")
+        raise typer.Exit(1)
+    problems = config_mod.runtime_problems(cfg)
+    if problems:
+        con.print("[red]Your settings have a problem:[/red]")
+        for p in problems:
             con.print(f"  - {p}")
         raise typer.Exit(1)
     enabled = [n for n, s in cfg.sources if getattr(s, "enabled", False)]
@@ -225,8 +233,7 @@ def mark(job_id: str, status: str):
     j = db.get_job(conn, job_id)
     if not j:
         raise UserError(f"No job with id '{job_id}'.")
-    old = j["status"]
-    j = db.set_status(conn, j["id"], status)
+    j, old = db.mark(conn, j["id"], status)
     from .connectors import notify_updated
     notify_updated(_cfg(), j, {"status": [old, status]})
     con.print(f"{j['company']} — {j['title']}: [bold]{status}[/bold]")
@@ -360,6 +367,47 @@ def key_status():
     from . import secrets
     for n in secrets.names():
         con.print(f"{n}: {'set' if secrets.get(n) else 'not set'}")
+
+
+# ── connectors ────────────────────────────────────────────
+@connectors_app.command("sync")
+def connectors_sync(name: str = typer.Argument(..., help="Which connector: obsidian"),
+                    dry_run: bool = typer.Option(False, "--dry-run", help="Only list what would change.")):
+    """Write notes for all the jobs you already have (safe to run again: unchanged notes are left alone)."""
+    from . import connectors
+    if name != "obsidian":
+        raise UserError("Only 'obsidian' can be synced. Example: jobapp connectors sync obsidian")
+    cfg = _cfg()
+    if not cfg.connectors.obsidian.enabled:
+        raise UserError("The Obsidian connector is switched off. Set connectors.obsidian.enabled: true in config.yaml.")
+    problems = config_mod.runtime_problems(cfg)
+    if problems:
+        raise UserError("\n".join(problems))
+    conn = _conn()
+    c = connectors.get(cfg, "obsidian")
+    if not dry_run and c.two_way:
+        n = connectors.pull_all(cfg, conn)
+        if n:
+            con.print(f"Took {n} status change(s) from your notes.")
+    try:
+        res = c.sync(conn, dry_run=dry_run)
+        git = c.git_commit() if (c.oc.git_push and not dry_run) else None
+    except Exception as e:  # noqa: BLE001
+        connectors._record_error("obsidian", "sync", e)
+        raise UserError(f"Couldn't write the notes: {e}")
+    connectors._clear_error("obsidian")
+    verb = "would be " if dry_run else ""
+    for label, key in (("created", "created"), ("updated", "updated"), ("regenerated", "generated")):
+        for p in res[key]:
+            con.print(f"  {verb}{label}: {p.relative_to(c.vault)}")
+    con.print(f"{len(res['created'])} note(s) {verb}created, {len(res['updated'])} {verb}updated, "
+              f"{res['unchanged']} unchanged" + (f", {len(res['generated'])} dashboard note(s) {verb}regenerated"
+                                                  if res["generated"] else "") + ".")
+    if res["imported"]:
+        con.print(f"{len(res['imported'])} status(es) {'would be ' if dry_run else ''}taken over from older notes "
+                  "(e.g. 'applied').")
+    if git:
+        con.print(f"git: {git}")
 
 
 # ── schedule ──────────────────────────────────────────────

@@ -115,8 +115,52 @@ class ToggleCfg(_M):
     enabled: bool = False
 
 
+def _rel_folder(v: str, what: str) -> str:
+    v = str(v).strip().strip("/")
+    if not v:
+        raise ValueError(f"{what} can't be empty")
+    if Path(v).is_absolute() or ".." in Path(v).parts or v.startswith("~"):
+        raise ValueError(f"'{v}' must be a folder name inside your vault (like 'Jobs'), not a full path")
+    return v
+
+
+class ObsidianSubfolders(_M):
+    fulltime: str = "Full-Time"
+    internship: str = "Internships"
+    parttime: str = "Part-Time"
+
+    @field_validator("fulltime", "internship", "parttime")
+    @classmethod
+    def _rel(cls, v: str) -> str:
+        return _rel_folder(v, "subfolder")
+
+
+class ObsidianCfg(_M):
+    enabled: bool = False
+    vault: str = "~/Documents/Obsidian Vault"
+    folder: str = "Jobs"
+    subfolders: ObsidianSubfolders = Field(default_factory=ObsidianSubfolders)
+    only_visible: bool = True
+    min_match: float = Field(0, ge=0, le=100)
+    dashboard_note: bool = True
+    two_way: bool = False
+    git_push: bool = False
+
+    @field_validator("folder")
+    @classmethod
+    def _rel(cls, v: str) -> str:
+        return _rel_folder(v, "folder")
+
+    @field_validator("vault")
+    @classmethod
+    def _vault(cls, v: str) -> str:
+        if not str(v).strip():
+            raise ValueError("give the path of your Obsidian vault, e.g. '~/Documents/Obsidian Vault'")
+        return str(v).strip()
+
+
 class ConnectorsCfg(_M):
-    obsidian: ToggleCfg = Field(default_factory=ToggleCfg)
+    obsidian: ObsidianCfg = Field(default_factory=ObsidianCfg)
     jsonl: ToggleCfg = Field(default_factory=ToggleCfg)
 
 
@@ -189,6 +233,18 @@ def parse(data: dict | None) -> Config:
         return Config.model_validate(data or {})
     except ValidationError as e:
         raise ConfigError(friendly_errors(e)) from None
+
+
+def runtime_problems(cfg: Config) -> list[str]:
+    """Checks that need the filesystem (kept out of parsing so a missing vault never stops a poll)."""
+    out = []
+    ob = cfg.connectors.obsidian
+    if ob.enabled:
+        vault = cfg.resolve(ob.vault)
+        if not vault.is_dir():
+            out.append(f"connectors.obsidian.vault: folder not found: {vault} "
+                       "(open Obsidian → 'Open folder as vault' shows where your vault is)")
+    return out
 
 
 def title_include() -> list[str]:

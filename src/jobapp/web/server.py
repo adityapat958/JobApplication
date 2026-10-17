@@ -95,12 +95,10 @@ def create_app(poll_fn=None) -> FastAPI:
         if status not in STATUSES:
             raise HTTPException(400, f"status must be one of {', '.join(STATUSES)}")
         c = conn()
-        old = job_or_404(c, job_id)["status"]
-        j = db.set_status(c, job_id, status)
-        if j["hidden"] and status != "new":
-            db.set_hidden(c, job_id, False)  # a job you're tracking is never hidden
+        job_or_404(c, job_id)
+        j, old = db.mark(c, job_id, status)  # also un-hides a job you're tracking
         from ..connectors import notify_updated
-        notify_updated(cfg(), db.get_job(c, job_id), {"status": [old, status]})
+        notify_updated(cfg(), j, {"status": [old, status]})
         return {"ok": True, "status": j["status"], "done": j["done"]}
 
     @app.post("/api/jobs/{job_id}/notes")
