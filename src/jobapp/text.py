@@ -268,6 +268,7 @@ _BOILER_LINE = re.compile(
     r"(?:401\(?k\)?|dental|medical|vision) (?:insurance|plan|benefits|coverage)|paid time off|"
     r"visa sponsorship|background check|drug[- ]free|affirmative action|"
     r"cookies?\b.*(?:accept|policy)|privacy policy|"
+    r"\bseries [a-f]\b.*\b(?:funding|round|valuation|raised)|\braised \$|\$[\d.,]+ ?(?:million|billion|[mb])\b.*\b(?:valuation|funding|round)|"
     r"oppfordrer (?:alle )?kvalifiserte|uavhengig av (?:kjønn|alder|etnisitet)|offentlighetsloven|"
     r"søkerliste|pensjonsordning|forsikringsordning|konkurransedyktig lønn)", re.I)
 _URL = re.compile(r"(?:https?://|www\.)\S+", re.I)

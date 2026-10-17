@@ -164,6 +164,11 @@ def test_contact_please_contact_block():
     assert "Tableau" in out
 
 
+def test_funding_blurb_is_boilerplate():
+    jd = "Following a $200 million Series B at a $2.2 billion valuation, we are growing.\nYou will use Rust."
+    assert find_missing(clean_jd(jd), BANK) == ["Rust"]
+
+
 def test_boilerplate_section_ends_at_next_heading():
     jd = "About us\nWe are a Great Place.\n\nRequirements\n• Python and Docker\n"
     out = strip_boilerplate(jd)
