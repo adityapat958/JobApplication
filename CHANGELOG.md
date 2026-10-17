@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.3
+## v0.1.4
 **Cleaner "missing" keywords**
 - `missing` now lists only real skills: terms from a built-in skills vocabulary (`skills_vocab.yaml`, ~360
   tech / business / analytics terms with aliases and Norwegian equivalents) that the ad mentions and your
@@ -33,6 +33,14 @@
 
 **Other**
 - Database migration 004: `variant`, `legacy_id`, `note_path`, `legacy_url_key`.
+
+## v0.1.3
+- Fix: the dashboard stopped working when Claude started it. `jobapp serve` ran in the foreground, so Claude's
+  command time limit killed it (or Claude waited forever). New `jobapp serve --background` starts it detached,
+  waits until it answers, opens the browser and returns; `--status` / `--stop`. Claude now always uses it.
+- Fix: if port 8765 is already in use, the dashboard picks the next free port instead of failing.
+- New MCP tool `open_dashboard` for Claude Desktop.
+- `/setup` no longer asks about Obsidian (it confused new users); connectors are set up only on request.
 
 ## v0.1.2
 **Obsidian notes (optional, off by default)**

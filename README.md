@@ -56,7 +56,7 @@ uv run jobapp list --sort match        # best matches first
 uv run jobapp show <id>                # one job in detail
 uv run jobapp build <id> --reveal      # tailored PDF, shown in Finder
 uv run jobapp mark <id> applied        # keep track
-uv run jobapp serve                    # dashboard in your browser (http://127.0.0.1:8765)
+uv run jobapp serve --background       # dashboard in your browser (keeps running; --stop to stop)
 uv run jobapp schedule install         # search automatically at the times in config.yaml
 uv run jobapp connectors sync obsidian # optional: one note per job in Obsidian (see below)
 uv run jobapp rescore                  # after editing keywords.yaml

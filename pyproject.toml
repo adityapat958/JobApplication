@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jobapp"
-version = "0.1.3"
+version = "0.1.4"
 description = "Job-search assistant: find jobs, filter, score against your resume, build tailored PDFs."
 readme = "README.md"
 license = { text = "MIT" }

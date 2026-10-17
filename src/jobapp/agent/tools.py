@@ -232,5 +232,11 @@ def update_config_filters(title_include: list[str] | None = None, title_exclude:
             "filters_now": new.filters.model_dump(mode="json")}
 
 
+def open_dashboard() -> dict:
+    """Start the dashboard in the background (if needed) and open it in the browser. Returns its address."""
+    from ..web import daemon
+    return {"ok": True, "message": daemon.start()}
+
+
 ALL = [find_jobs, list_jobs, job_details, build_resume, mark_job, import_resume_prepare,
-       import_resume_submit_tex, doctor, update_config_filters]
+       import_resume_submit_tex, doctor, update_config_filters, open_dashboard]
