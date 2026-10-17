@@ -173,8 +173,24 @@ class ObsidianCfg(_M):
     only_visible: bool = True
     min_match: float = Field(0, ge=0, le=100)
     dashboard_note: bool = True
+    dashboard_file: str = "_Dashboard.md"      # generated notes, inside `folder`
+    new_today_file: str = "_New Today.md"
     two_way: bool = False
     git_push: bool = False
+
+    @field_validator("dashboard_file", "new_today_file")
+    @classmethod
+    def _note_name(cls, v: str) -> str:
+        v = str(v).strip()
+        if not v or "/" in v or "\\" in v or v.startswith(".") or not v.endswith(".md"):
+            raise ValueError(f"'{v}' must be a note file name like '_Dashboard.md' (no folders)")
+        return v
+
+    @model_validator(mode="after")
+    def _distinct(self):
+        if self.dashboard_file.casefold() == self.new_today_file.casefold():
+            raise ValueError("dashboard_file and new_today_file must be different notes")
+        return self
 
     @field_validator("folder")
     @classmethod

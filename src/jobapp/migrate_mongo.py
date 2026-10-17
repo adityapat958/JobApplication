@@ -96,6 +96,8 @@ def doc_to_row(doc: dict, variants: list[str] | None = None) -> dict:
         sid = m[1] if m else None
     sid = sid or f"legacy:{old_id}"
     company, title = clean(doc.get("company")), clean(doc.get("title"))
+    if company in ("↳", "-", "—"):  # the old Simplify watcher stored the "same company" arrow as the name
+        company = clean(doc.get("_company_hint")) or ""
     if not title:
         nc, nt = _from_note_name(doc.get("note_path"))
         company, title = company or nc, nt
@@ -178,6 +180,7 @@ def import_docs(cfg, conn, docs, *, dry_run: bool = False, rescore: bool = True)
     # tracked jobs first, then ones with a description, then oldest: the first document of a listing wins
     docs = sorted(docs, key=lambda d: ((d.get("status") or "new") == "new" and not d.get("done"),
                                        not d.get("jd_body"), str(d.get("date_found") or "9999")))
+    docs = _link_twins(docs)
     conn.execute("BEGIN")
     try:
         for doc in docs:
@@ -195,6 +198,9 @@ def import_docs(cfg, conn, docs, *, dry_run: bool = False, rescore: bool = True)
                 continue
             taken = conn.execute("SELECT id, status, description, jd_saved_at FROM jobs WHERE source=? AND source_id=?",
                                  (row["source"], row["source_id"])).fetchone()
+            if taken is None and doc.get("_twin_of"):
+                taken = conn.execute("SELECT id, status, description, jd_saved_at FROM jobs WHERE legacy_id=?",
+                                     (doc["_twin_of"],)).fetchone()
             if taken is not None:  # two old documents for one listing (e.g. two link styles): one row
                 rep.same_listing += 1
                 if taken["id"] in inserted:
@@ -228,6 +234,40 @@ def import_docs(cfg, conn, docs, *, dry_run: bool = False, rescore: bool = True)
         conn.execute("ROLLBACK")
         raise
     return rep
+
+
+def _same_title(a: str, b: str) -> bool:
+    a, b = dd.norm_title(a), dd.norm_title(b)
+    return bool(a and b) and (a == b or a.startswith(b + " ") or b.startswith(a + " "))
+
+
+def _link_twins(docs: list) -> list:
+    """Old documents of one listing saved twice under different ids (the title was edited, or the company was
+    stored as "↳"): same apply link shared by exactly these two, same place, same or extended title. The later
+    one is marked `_twin_of` the first. "↳" companies are filled in from the twin. Input order is kept."""
+    groups: dict = {}
+    for d in docs:
+        k = (map_source(d.get("source")), db.url_key(d.get("apply_url") or d.get("url")))
+        if k[1]:
+            groups.setdefault(k, []).append(d)
+    out = [dict(d) for d in docs]
+    by_id = {id(d): o for d, o in zip(docs, out)}
+    for g in groups.values():
+        if len(g) != 2:
+            continue  # unique link, or a generic careers-page link shared by many jobs
+        a, b = (by_id[id(x)] for x in g)
+        if clean(a.get("location")).casefold() != clean(b.get("location")).casefold():
+            continue
+        if not _same_title(a.get("title") or "", b.get("title") or ""):
+            continue
+        ca, cb = clean(a.get("company")), clean(b.get("company"))
+        if ca not in ("", "↳") and cb not in ("", "↳") and dd.norm_company(ca) != dd.norm_company(cb):
+            continue
+        for x, y in ((a, cb), (b, ca)):
+            if y not in ("", "↳"):
+                x["_company_hint"] = y
+        b["_twin_of"] = str(a.get("id") or a.get("_id"))
+    return out
 
 
 def _merge(conn, have, row: dict) -> None:

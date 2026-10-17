@@ -145,7 +145,13 @@ def find_existing(conn: sqlite3.Connection, job: JobPosting, *, adopt: bool = Tr
     legacy = "SELECT id, jd_saved_at, description, location FROM jobs WHERE source=? AND source_id LIKE 'legacy:%' "
     cand = None
     for u in dict.fromkeys(x for x in (url_key(job.apply_url), url_key(job.url)) if x):
-        rows = conn.execute(legacy + "AND legacy_url_key=?", (job.source, u)).fetchall()
+        rows = conn.execute(legacy.replace("location FROM", "location, title FROM") + "AND legacy_url_key=?",
+                            (job.source, u)).fetchall()
+        if len(rows) > 1:  # one link for several imported jobs: the one with this title (and place)
+            t = dd.norm_title(job.title)
+            rows = [r for r in rows if dd.norm_title(r["title"]) == t]
+            if len(rows) > 1:
+                rows = [r for r in rows if dd.norm_title(r["location"]) == dd.norm_title(job.location)]
         if len(rows) == 1:
             cand = rows[0]
             break

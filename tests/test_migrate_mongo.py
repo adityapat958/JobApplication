@@ -145,8 +145,15 @@ def test_obsidian_adopts_exact_old_note_in_copied_vault(cfg, tmp_path):
     (vault / "Jobs" / "Internships").mkdir()
     ocfg = config.parse({"resume": cfg.resume.model_dump(), "connectors": {"obsidian": {
         "enabled": True, "vault": str(vault), "folder": "Jobs"}}})
+    # the original vault still exists elsewhere: it must never be read or written
+    orig = tmp_path / "orig" / "Collection" / "Jobs" / "Full-Time"
+    orig.mkdir(parents=True)
+    (orig / "Acme Robotics — Perception Engineer.md").write_text(old)
     conn = db.connect()
-    mm.import_docs(cfg, conn, docs())
+    ds = docs()
+    for d in ds:
+        d["note_path"] = d["note_path"].replace(VAULT_JOBS, str(orig.parent))
+    mm.import_docs(cfg, conn, ds)
     c = ob.ObsidianConnector(ocfg)
     res = c.sync(conn, create_all=True)
     text = (ft / "Acme Robotics — Perception Engineer.md").read_text()
@@ -158,6 +165,7 @@ def test_obsidian_adopts_exact_old_note_in_copied_vault(cfg, tmp_path):
     assert sorted(p.name for p in vault.rglob("*.md")) == ["Acme Robotics — Perception Engineer.md",
                                                             "_Dashboard.md", "_New Today.md"]
     assert c.sync(conn, create_all=True)["updated"] == []
+    assert (orig / "Acme Robotics — Perception Engineer.md").read_text() == old
 
 
 def test_cli_migrate_from_mongo(cfg, monkeypatch):
@@ -216,3 +224,35 @@ def test_load_docs_with_fake_client(monkeypatch):
         mm.load_docs("mongodb://fake", "jobdesk") if False else None
         Client.__init__ = lambda self, uri, **kw: setattr(self, "dbs", {"x": DB()})
         mm.load_docs("mongodb://fake", "x")
+
+
+def _simp(id_, company, title, url, loc="Kent, WA", **kw):
+    return {"id": id_, "apply_url": url, "company": company, "title": title, "location": loc, "jd_body": "",
+            "source": "SimplifyJobs", "status": "new", "type": "internship", "date_found": "2026-08-05",
+            "note_path": f"{VAULT_JOBS}/Internships/{company} — {title}.md", **kw}
+
+
+def test_old_duplicates_of_one_listing_become_one_row(cfg):
+    conn = db.connect()
+    ds = [_simp("rocketco-software-intern-software", "RocketCo", "Software Intern - Software", "https://ats.invalid/r/1"),
+          _simp("rocketco-software-intern", "RocketCo", "Software Intern", "https://ats.invalid/r/1?utm_source=Simplify"),
+          _simp("gm-mapping", "↳", "AI/ML Engineer Intern - Mapping", "https://ats.invalid/gm/2", "Warren, MI"),
+          _simp("general-motors-mapping", "General Motors", "AI/ML Engineer Intern - Mapping", "https://ats.invalid/gm/2", "Warren, MI"),
+          # same link, different jobs (a generic careers page) → kept apart
+          _simp("big-a", "BigCo", "Compiler Engineer", "https://ats.invalid/big"),
+          _simp("big-b", "BigCo", "Firmware Engineer", "https://ats.invalid/big"),
+          _simp("big-c", "BigCo", "Research Scientist", "https://ats.invalid/big"),
+          # same link + title but another city → different jobs
+          _simp("lo-1", "LoCo", "Data Intern", "https://ats.invalid/lo", "Austin, TX"),
+          _simp("lo-2", "LoCo", "Data Intern", "https://ats.invalid/lo", "Denver, CO")]
+    rep = mm.import_docs(cfg, conn, ds)
+    assert rep.inserted == 7 and rep.same_listing == 2
+    gm = conn.execute("SELECT company FROM jobs WHERE legacy_id IN ('gm-mapping', 'general-motors-mapping')").fetchall()
+    assert [r[0] for r in gm] == ["General Motors"]  # "↳" filled in from the twin
+    assert mm.import_docs(cfg, conn, ds).inserted == 0
+    # a poll listing one of the generic-link jobs adopts the right one by title
+    p = JobPosting("simplify", "u-1", "Firmware Engineer", "BigCo", "Kent, WA", apply_url="https://ats.invalid/big")
+    jid, new = db.upsert_job(conn, p)
+    assert not new and db.get_job(conn, jid)["legacy_id"] == "big-b"
+    p2 = JobPosting("simplify", "u-2", "Software Intern", "RocketCo", "Kent, WA", apply_url="https://ats.invalid/r/1")
+    assert db.upsert_job(conn, p2)[1] is False

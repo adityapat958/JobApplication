@@ -443,7 +443,9 @@ def key_status():
 # ── connectors ────────────────────────────────────────────
 @connectors_app.command("sync")
 def connectors_sync(name: str = typer.Argument(..., help="Which connector: obsidian"),
-                    dry_run: bool = typer.Option(False, "--dry-run", help="Only list what would change.")):
+                    dry_run: bool = typer.Option(False, "--dry-run", help="Only list what would change."),
+                    adopt_dashboards: bool = typer.Option(False, "--adopt-dashboards",
+                                                          help="Replace existing files at the dashboard note names.")):
     """Write notes for all the jobs you already have (safe to run again: unchanged notes are left alone)."""
     from . import connectors
     if name != "obsidian":
@@ -460,14 +462,21 @@ def connectors_sync(name: str = typer.Argument(..., help="Which connector: obsid
         n = connectors.pull_all(cfg, conn)
         if n:
             con.print(f"Took {n} status change(s) from your notes.")
+    c.adopt_dashboards = adopt_dashboards
     try:
         res = c.sync(conn, dry_run=dry_run)
         git = c.git_commit() if (c.oc.git_push and not dry_run) else None
     except Exception as e:  # noqa: BLE001
         connectors._record_error("obsidian", "sync", e)
         raise UserError(f"Couldn't write the notes: {e}")
-    connectors._clear_error("obsidian")
     verb = "would be " if dry_run else ""
+    try:
+        c.raise_blocked(res)
+        connectors._clear_error("obsidian")
+    except Exception as e:  # noqa: BLE001
+        if not dry_run:
+            connectors._record_error("obsidian", "dashboards", e)
+        err.print(f"[yellow]![/yellow] {e}")
     for label, key in (("created", "created"), ("updated", "updated"), ("regenerated", "generated")):
         for p in res[key]:
             con.print(f"  {verb}{label}: {p.relative_to(c.vault)}")
