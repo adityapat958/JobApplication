@@ -11,7 +11,7 @@ This repo is the tool; their personal data lives in their profile folder, not he
 
 ## What you may edit
 - ✅ Only files in their profile folder: `$JOBAPP_HOME` (default `~/JobApplication-data/`):
-  `config.yaml`, `resume/resume.tex`, `resume/keywords.yaml`, `import/*`.
+  `config.yaml`, `resume/resume.tex`, `resume/keywords.yaml`, `import/*`, `coverletter/*`, `letters/<id>/body.md`.
 - ❌ Never edit the code (`src/`, `tests/`, `scripts/`, `pyproject.toml`), never `git push`, never `rm -rf`.
   If the tool itself seems broken, run `uv run jobapp report-bug` and tell the user where the zip is.
 - Never log into websites for the user, never send emails or applications for them.
@@ -29,6 +29,7 @@ Always run commands from this folder with `uv run jobapp …` (or `jobapp …` i
 | see why jobs were hidden | `uv run jobapp list --hidden` |
 | details of one job | `uv run jobapp show <id>` |
 | make a tailored PDF | `uv run jobapp build <id>` (add `--reveal` to open the folder) |
+| write a cover letter | `uv run jobapp letter <id> --prepare` → write body → `--verify` → `--accept` (see below) |
 | record progress | `uv run jobapp mark <id> applied` (new, interested, applied, interview, rejected, offer, ignored) |
 | re-score after editing keywords | `uv run jobapp rescore` |
 | open the dashboard | `uv run jobapp serve --background` (opens the browser and returns; never run plain `jobapp serve` — it blocks and is killed when your command times out) |
@@ -97,5 +98,20 @@ Add `--json` to `list`/`doctor` when you want to read results programmatically.
    `uv run jobapp resume import --accept` (the old resume is backed up).
 6. Help them review `resume/keywords.yaml` so it matches their real skills.
 
+## Cover letters (agent mode — no API key needed)
+Profile files: `coverletter/template.tex` (one page; the text goes between `% <<LETTER-BODY>>` markers),
+`coverletter/style.yaml` (language en|no|auto, tone, max_words, banned phrases, sign-off, `allow:` list),
+`coverletter/samples/` (their own past letters, used for tone only). Older profiles: `uv run jobapp coverletter init`.
+1. `uv run jobapp letter <id> --prepare` (`--language no` for Norwegian) → writes `letters/<id>/prompt.md`.
+2. Follow it. Write ONLY the body paragraphs to `letters/<id>/body.md`. Every number and every name / tool /
+   organisation must come from their resume or the ad — the check lists anything it can't find.
+3. `uv run jobapp letter <id> --verify`; on failure fix only what `letters/<id>/fix_report.md` lists. **Max 3 rounds.**
+4. `uv run jobapp letter <id> --accept` → `output/<First>_<Last>_<Company>_<Role>_CoverLetter.pdf` + `.txt`
+   (Norwegian letters end in `_NO`). With an API key: `jobapp letter <id> --api` does the loop.
+- Checks: facts traceable, company + role named, 150–max_words words, one page, no banned phrases, ≥2 of the
+  ad's matched keywords, right language, no placeholders. If a true fact is flagged (e.g. a certificate that's
+  not on the resume), the fix is to add it to the resume or to `allow:` in style.yaml — only after the user confirms.
+- MCP: `cover_letter_prepare(job_id, language)` → `cover_letter_submit(job_id, body)`.
+
 ## Slash commands
-`/setup`, `/find-jobs`, `/tailor`, `/import-resume`, `/applied`, `/update`, `/report-bug` (see `.claude/commands/`).
+`/setup`, `/find-jobs`, `/tailor`, `/cover-letter`, `/import-resume`, `/applied`, `/update`, `/report-bug` (see `.claude/commands/`).

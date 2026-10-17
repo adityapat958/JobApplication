@@ -17,6 +17,8 @@ Claude runs the tool, explains things in plain English, and fixes settings for y
 - **Builds a tailored resume**: only the two Skills lines change per job (the ad's matching keywords go first);
   every other letter of your resume stays exactly as you wrote it. The PDF is named
   `First_Last_Company_Role.pdf`.
+- **Writes a tailored cover letter** (English or Norwegian): Claude writes the text, the tool checks that every
+  number and name in it comes from your resume or the ad, that it fits on one page and avoids clichés.
 - **Tracks** what you did: interested → applied → interview → offer.
 - **Imports your Word or PDF resume** into the PDF template. Claude types it; the tool checks every word, link and
   the page count against your original file.
@@ -34,7 +36,7 @@ Claude runs the tool, explains things in plain English, and fixes settings for y
    and runs a first check.
 
 Then just ask things like *"find new jobs"*, *"make a resume for the DNV one"*, *"I applied to it"*,
-or use the shortcuts `/find-jobs`, `/tailor`, `/applied`, `/import-resume`, `/report-bug`, `/update`.
+or use the shortcuts `/find-jobs`, `/tailor`, `/cover-letter`, `/applied`, `/import-resume`, `/report-bug`, `/update`.
 
 ## Manual install (Mac)
 ```bash
@@ -75,6 +77,18 @@ With your own API key (`uv run jobapp key set ANTHROPIC_API_KEY`, stored in the 
 loop runs automatically: `uv run jobapp resume import resume.docx --api` (or `resume.pdf`).
 A Word file gives the best result (bold/italic are kept); a PDF works too as long as its text can be selected
 (not a scan).
+
+## Cover letters
+```bash
+uv run jobapp letter <id> --prepare      # Claude follows letters/<id>/prompt.md and writes letters/<id>/body.md
+uv run jobapp letter <id> --verify       # facts, length, one page, banned phrases, keywords, language
+uv run jobapp letter <id> --accept       # output/First_Last_Company_Role_CoverLetter.pdf + .txt for web forms
+```
+Or just ask Claude: `/cover-letter <id>` (or click **Cover letter ✉** on a job in the dashboard).
+`--language no` writes a Norwegian *søknad*; `--api` runs the loop with your own API key.
+Settings live in `~/JobApplication-data/coverletter/`: `template.tex` (layout), `style.yaml` (language, tone,
+word limit, banned phrases like "passionate" or "I am writing to express", sign-off) and `samples/` (drop in
+your own past letters — used for tone only). Profiles made before this feature: `uv run jobapp coverletter init`.
 
 ## Obsidian (optional)
 If you keep notes in [Obsidian](https://obsidian.md), JobApplication can write one note per job into your

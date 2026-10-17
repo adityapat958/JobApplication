@@ -195,6 +195,7 @@ def managed_values(job: dict, old: dict | None = None) -> dict:
         if isinstance(applied, str):
             applied = date.fromisoformat(applied) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", applied) else applied
     pct = job.get("match_pct")
+    extra = {"cover_letter": job["cover_letter"]} if job.get("cover_letter") else {}  # set once a letter is accepted
     return {
         "status": status,
         "date_applied": applied,
@@ -204,7 +205,7 @@ def managed_values(job: dict, old: dict | None = None) -> dict:
         "missing": list(job.get("missing") or []),
         "url": job.get("apply_url") or job.get("url") or None,
         "also_on": [a["source"] for a in job.get("also_on") or []],
-    }
+    } | extra
 
 
 def render_note(job: dict, stamp: datetime | None = None) -> str:
@@ -223,6 +224,8 @@ def render_note(job: dict, stamp: datetime | None = None) -> str:
     fm += [f"status: {_q(v['status'])}", f"date_found: {found.isoformat()}",
            f"date_applied: {_render(v['date_applied'])}".rstrip(), f"tags: [{', '.join(tags)}]"]
     fm += [f"{k}: {_render(v[k])}".rstrip() for k in MANAGED if k not in ("status", "date_applied")]
+    if v.get("cover_letter"):
+        fm.append(f"cover_letter: {_render(v['cover_letter'])}")
     url = v["url"]
     link = f"[🔗 Apply Now]({_link_target(url)})" if url else "_Link not available — search manually_"
     rows = [f"| 📍 Location | {_cell(job.get('location'))} |"]

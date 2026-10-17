@@ -327,3 +327,32 @@ PHASE feat/obsidian: DONE
   0 created); repeat syncs/polls change nothing; first poll adds 33 notes and no duplicates of imported jobs;
   `missing` drops from ~8 to ~0.2 terms per job with no names. Rollback script tested on a copy (Jobs/ part).
 - Open: merge to main + tag v0.1.4, then run the cutover plan (outside the repo) on the real system.
+
+## feat/cover-letter — tailored cover letter per job
+- Branch `feat/cover-letter` off `main` (v0.1.3), own worktree. No migration: letters are files under
+  `letters/<id>/` + `letters/index.json` in the profile.
+- `src/jobapp/letter.py`: prepare (JD with contact/boilerplate stripped, detexed resume, matched/missing keywords,
+  style.yaml, ≤2 samples — same language first, prompt `prompts/cover_letter.md`) → agent writes `body.md` →
+  verify (7 gates + 1-page compile; `fix_report.md`; max 3 rounds; history in meta.json) → accept
+  (`output/<First>_<Last>_<Company>_<Role>_CoverLetter[_NO].pdf` + `.txt`, index, Obsidian `cover_letter:` key).
+  `--api` loop reuses the import's Anthropic/Gemini caller. Salutation/sign-off the model adds anyway are stripped.
+- Surfaces: CLI `letter`, `coverletter init`; dashboard "Cover letter ✉" (status, prepare en/no, download PDF,
+  copy text); MCP `cover_letter_prepare`/`cover_letter_submit`; `/cover-letter`; CLAUDE.md, README, CHANGELOG.
+- Tests: `tests/test_letter.py` 24 (gates pass/fail: invented 40% / employer / year / tool, banned phrase,
+  too long/short, wrong language both ways, placeholders, company/role/keywords, Norwegian number style and
+  genitives; template render + 1-page compile + overflow; prepare strips JD contact; samples; MCP list + loop;
+  CLI end to end; API loop with fake caller; web endpoints; Obsidian key). Full offline suite: 330 passed.
+  Privacy scan clean.
+- Real check (test profiles outside the repo, samples copied from the user's letters folder into the profile):
+  - user B, top job (Norwegian public-sector analyst ad): EN — round 1 failed on "300" (tokenizer split
+    "2,300"; fixed in code), round 2 passed unchanged. NO — round 1 failed on "BIs" (Norwegian genitive) and
+    "Fagene" (sentence-initial noun); both code false positives, fixed; round 2 passed unchanged. Both 1 page.
+  - user A, perception internship: passed round 1, 1 page. Tamper test on the same body: invented employer +
+    year + "47%" all flagged.
+  - PNGs of page 1 in each profile's `compare/`.
+- Open issues: the fact trace is token-level, not claim-level — a name from the JD ("two years at <JD vendor>")
+  or a resume number in the wrong context passes (seen in the tamper test); the prompt and the user's read-through
+  are the guard. Sentence-initial words are trusted via a starter list (+ Norwegian definite-plural suffixes).
+  One draft per job at a time (preparing the other language resets the draft; accepted PDFs stay). Dashboard
+  has no API-mode button. Single-digit "5 %" is checked as a plain number.
+PHASE feat/cover-letter: DONE

@@ -15,7 +15,8 @@ INSTRUCTIONS = (
     "JobApplication helps a non-technical user find jobs and make a tailored PDF resume per job. "
     "Explain results in plain English. Typical flow: doctor → find_jobs → list_jobs → job_details → "
     "build_resume → mark_job(applied). For a Word or PDF resume: import_resume_prepare then "
-    "import_resume_submit_tex (max 3 rounds)."
+    "import_resume_submit_tex (max 3 rounds). Cover letter: cover_letter_prepare then cover_letter_submit "
+    "(max 3 rounds; only facts from the resume or the ad)."
 )
 
 

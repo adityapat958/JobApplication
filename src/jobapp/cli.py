@@ -23,6 +23,8 @@ app.add_typer(config_app, name="config")
 app.add_typer(resume_app, name="resume")
 app.add_typer(schedule_app, name="schedule")
 connectors_app = typer.Typer(no_args_is_help=True, help="Send your jobs to other apps (e.g. Obsidian notes).")
+coverletter_app = typer.Typer(no_args_is_help=True, help="Cover letter settings (template, style, samples).")
+app.add_typer(coverletter_app, name="coverletter")
 app.add_typer(connectors_app, name="connectors")
 
 con = Console(soft_wrap=True)
@@ -427,6 +429,65 @@ def resume_import(docx: Optional[str] = typer.Argument(None, help="Your resume: 
     p = di.prepare(docx)
     con.print(f"Prompt written: [bold]{p}[/bold]")
     con.print(f"Next: write the LaTeX to {di.candidate_path()} and run 'jobapp resume import --verify'.")
+
+
+# ── cover letters ─────────────────────────────────────────
+@coverletter_app.command("init")
+def coverletter_init(force: bool = typer.Option(False, "--force", help="Overwrite with the example versions.")):
+    """Add the cover letter template, style.yaml and samples/ folder to your profile."""
+    from . import letter as lt
+    created = lt.init_profile(force=force)
+    con.print(f"Cover letter files in {lt.profile_dir()}: " + (", ".join(created) or "already there (nothing changed)"))
+    con.print("Put your own past letters in coverletter/samples/ (optional) and check coverletter/style.yaml.")
+
+
+@app.command("letter")
+def letter_cmd(job_id: str,
+               prepare: bool = typer.Option(False, "--prepare", help="Write letters/<id>/prompt.md for Claude."),
+               verify: bool = typer.Option(False, "--verify", help="Check letters/<id>/body.md."),
+               accept: bool = typer.Option(False, "--accept", help="After a passing verify, make the PDF + text."),
+               api: bool = typer.Option(False, "--api", help="Do the whole loop with an API key."),
+               language: Optional[str] = typer.Option(None, "--language", "-l", help="en or no (default: style.yaml)."),
+               as_json: bool = typer.Option(False, "--json")):
+    """Write a tailored cover letter for one job (Claude writes, code checks the facts and format)."""
+    from . import db
+    from . import letter as lt
+    job = db.get_job(_conn(), job_id)  # a unique prefix of the id is fine
+    if not job:
+        raise UserError(f"No job with id '{job_id}'. See 'jobapp list'.")
+    job_id = job["id"]
+    if verify or accept:
+        if not (accept and not verify and lt.passed(job_id)):  # already verified: don't count another round
+            rep = lt.verify(job_id)
+            con.print(rep.summary())
+            if not rep.ok:
+                con.print(f"Fix list written to [bold]{lt.fix_report_path(job_id)}[/bold]")
+                raise typer.Exit(1)
+        if accept:
+            pdf, txt = lt.accept(_cfg(), _conn(), job_id)
+            con.print(f"[green]Cover letter ready:[/green] {pdf}\n  text for application forms: {txt}")
+        return
+    if api:
+        rep = lt.run_api(_cfg(), _conn(), job_id, language)
+        con.print(rep.summary())
+        if rep.ok:
+            pdf, txt = lt.accept(_cfg(), _conn(), job_id)
+            con.print(f"[green]Cover letter ready:[/green] {pdf}\n  text: {txt}")
+        raise typer.Exit(0 if rep.ok else 1)
+    if prepare:
+        p = lt.prepare(_cfg(), _conn(), job_id, language)
+        con.print(f"Prompt written: [bold]{p}[/bold]")
+        con.print(f"Next: write the letter body to {lt.body_path(job_id)} and run 'jobapp letter {job_id} --verify'.")
+        return
+    st = lt.status(job_id)
+    if as_json:
+        print(json.dumps(st, ensure_ascii=False, indent=1)); return
+    for lang, rec in st["letters"].items():
+        con.print(f"[green]ready ({lang})[/green]: {rec['pdf']}")
+    if st.get("draft"):
+        con.print(f"draft ({st['language']}): {st['draft']}, round {st['round']} of {lt.MAX_ROUNDS}")
+    if st["state"] == "none":
+        con.print(f"No cover letter yet. Start with: jobapp letter {job_id} --prepare")
 
 
 # ── API keys (only for automatic Word/PDF import) ─────────────

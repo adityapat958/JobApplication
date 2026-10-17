@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.5
+- New: tailored cover letter per job (`jobapp letter <id> --prepare/--verify/--accept/--api`, `/cover-letter`,
+  dashboard "Cover letter ✉", MCP `cover_letter_prepare`/`cover_letter_submit`). Claude writes the body; code
+  checks every number and name against the resume/ad, company + role, length, one page, banned phrases, matched
+  keywords, language (en/no) and placeholders. Output: `…_CoverLetter.pdf` + `.txt`. Profile files in
+  `coverletter/` (`jobapp coverletter init` for existing profiles). Obsidian notes get a `cover_letter:` key.
+
 ## v0.1.4
 **Cleaner "missing" keywords**
 - `missing` now lists only real skills: terms from a built-in skills vocabulary (`skills_vocab.yaml`, ~360
