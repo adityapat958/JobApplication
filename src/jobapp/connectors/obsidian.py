@@ -333,12 +333,47 @@ class ObsidianConnector:
             p = self._by_id.get(jid)
             if p is not None:
                 return p
+        if job.get("note_path"):
+            return self._legacy_note(job)  # imported job: only ever its own old note
         for c in self._by_name.get(_key(self._stem(job)), []):
             if c.exists() and c not in self._claimed:
                 text = c.read_text(encoding="utf-8", errors="replace")
                 if split_note(text)[0] is not None and not note_job_id(text):
                     return c  # an older note for this job without an id: adopt it
         return None
+
+    def _legacy_path(self, job: dict) -> Path | None:
+        """Where an imported job's old note is in this vault (its stored path, or the same path below the
+        Jobs folder when the vault was moved or copied)."""
+        raw = job.get("note_path")
+        if not raw:
+            return None
+        p = Path(raw).expanduser()
+        if not p.is_absolute():
+            p = self.vault / p
+        if p.exists():
+            return p
+        parts, fparts = p.parts, Path(self.oc.folder).parts
+        for i in range(len(parts) - len(fparts), -1, -1):
+            if tuple(parts[i:i + len(fparts)]) == tuple(fparts):
+                q = self.root.joinpath(*parts[i + len(fparts):])
+                return q if q.suffix == ".md" else None
+        return None
+
+    def _legacy_note(self, job: dict) -> Path | None:
+        """The imported job's old note if it exists, has frontmatter and isn't another job's note."""
+        p = self._legacy_path(job)
+        if p is None or not p.is_file() or p in self._claimed:
+            return None
+        try:
+            p.relative_to(self.root)
+        except ValueError:
+            return None
+        text = p.read_text(encoding="utf-8", errors="replace")
+        if split_note(text)[0] is None:
+            return None
+        jid = note_job_id(text)
+        return p if jid in (None, job["id"]) else None
 
     @staticmethod
     def _stem(job: dict) -> str:
@@ -377,8 +412,8 @@ class ObsidianConnector:
         self._check_vault()
         p = self.find(job)
         if p is None:
-            if not create:
-                return None
+            if not create or job.get("note_path"):
+                return None  # an imported job never gets a second note (its old one is gone or shared)
             p = self._new_path(job)
             self._write(p, render_note(job, self.clock()), "created")
             self._by_id[job["id"]] = p
@@ -466,10 +501,14 @@ class ObsidianConnector:
             since = state["since"] = now()
         self.scan()
         jobs = db.list_jobs(conn, include_hidden=True, include_duplicates=True)
+        # Several imported jobs can share one old note (reposts had the same file name): the job you track
+        # gets it, then a visible one, then the best match.
+        order = sorted(jobs, key=lambda j: ((j.get("status") or "new") == "new", bool(j.get("hidden") or
+                                            j.get("duplicate_of")), -(j.get("match_pct") or 0)))
         unchanged = 0
         try:
-            for j in jobs:
-                has = j["id"] in self._by_id
+            for j in order:
+                has = j["id"] in self._by_id or (j.get("note_path") and self._legacy_note(j) is not None)
                 want = self.eligible(j) and (create_all or (since and (j.get("first_seen_at") or "") >= since))
                 if not has and not want:
                     continue
