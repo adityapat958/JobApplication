@@ -168,6 +168,47 @@ def import_resume_submit_tex(tex: str, accept_if_ok: bool = False) -> dict:
 
 
 @_safe
+def cover_letter_prepare(job_id: str, language: str | None = None) -> dict:
+    """Start a tailored cover letter for a job (language 'en' or 'no'; default from coverletter/style.yaml):
+    returns the prompt. Write only the letter body following it, then call cover_letter_submit."""
+    from .. import letter as lt
+    conn = _conn()
+    j = db.get_job(conn, job_id)
+    if not j:
+        return {"ok": False, "error": f"No job with id '{job_id}'."}
+    p = lt.prepare(_cfg(), conn, j["id"], language)
+    return {"ok": True, "job_id": j["id"], "prompt_file": str(p), "prompt": p.read_text(encoding="utf-8"),
+            "next": "Write the letter body (Markdown paragraphs only), then call cover_letter_submit with it."}
+
+
+@_safe
+def cover_letter_submit(job_id: str, body: str, accept_if_ok: bool = True) -> dict:
+    """Check a cover letter body (facts traceable to the resume/ad, length, banned phrases, keywords,
+    language, one page). If it passes and accept_if_ok, makes the PDF + plain text in the output folder."""
+    from .. import letter as lt
+    conn = _conn()
+    j = db.get_job(conn, job_id)
+    if not j:
+        return {"ok": False, "error": f"No job with id '{job_id}'."}
+    jid = j["id"]
+    lt.body_path(jid).parent.mkdir(parents=True, exist_ok=True)
+    lt.body_path(jid).write_text(lt.clean_body(body)[0] + "\n", encoding="utf-8")
+    rep = lt.verify(jid)
+    out = {"ok": True, "passed": rep.ok, "round": rep.round, "max_rounds": lt.MAX_ROUNDS, "words": rep.words,
+           "checks": [{"name": g.name, "ok": g.ok, "detail": g.detail} for g in rep.gates],
+           "warnings": rep.warnings}
+    if not rep.ok:
+        out["fix_report"] = rep.fix_report()
+        out["next"] = ("Fix ONLY the listed problems and submit again." if rep.round < lt.MAX_ROUNDS else
+                       "Three rounds failed — stop and tell the user what the checks found.")
+    elif accept_if_ok:
+        pdf, txt = lt.accept(_cfg(), conn, jid)
+        out.update(pdf=str(pdf), text_file=str(txt),
+                   next="Tell the user where the PDF is; the .txt is for pasting into application forms.")
+    return out
+
+
+@_safe
 def doctor(check_sites: bool = True) -> dict:
     """Check the installation and settings; each problem has a fix hint."""
     from .. import doctor as d
@@ -212,4 +253,4 @@ def open_dashboard() -> dict:
 
 
 ALL = [find_jobs, list_jobs, job_details, build_resume, mark_job, import_resume_prepare,
-       import_resume_submit_tex, doctor, update_config_filters, open_dashboard]
+       import_resume_submit_tex, cover_letter_prepare, cover_letter_submit, doctor, update_config_filters, open_dashboard]

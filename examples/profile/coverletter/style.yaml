@@ -1,0 +1,30 @@
+# Cover letter style. Edit freely, then run: jobapp letter <job id> --prepare
+language: en            # en | no | auto (auto = the language of the job ad)
+tone: warm, direct and specific; plain words; no clichés
+max_words: 350          # body only (salutation and sign-off not counted)
+min_words: 150
+salutation:
+  en: "Dear Hiring Manager,"
+  "no": "Hei,"
+sign_off:
+  en: "Kind regards,"
+  "no": "Med vennlig hilsen"
+subject:
+  en: "Application for the position of {role}"
+  "no": "Søknad på stillingen som {role}"
+banned_phrases:
+  - I am writing to express
+  - I am writing to apply
+  - passionate
+  - leverage
+  - synergy
+  - dynamic
+  - fast-paced
+  - team player
+  - think outside the box
+  - go-getter
+  - hit the ground running
+  - results-driven
+# Words the fact check should accept even though they are not in your resume or the ad
+# (only things that are TRUE about you, e.g. a nickname or a certificate you just got).
+allow: []

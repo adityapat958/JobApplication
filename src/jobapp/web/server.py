@@ -154,6 +154,43 @@ def create_app(poll_fn=None) -> FastAPI:
         p = _pdf_path(conn(), job_id)
         return {"ok": reveal(p), "path": str(p)}
 
+    @app.get("/api/letter/{job_id}")
+    def letter_status(job_id: str):
+        from .. import letter as lt
+        j = job_or_404(conn(), job_id)
+        st = lt.status(j["id"])
+        for lang, rec in st["letters"].items():
+            rec["pdf_url"] = f"/api/letter/{j['id']}/pdf?lang={lang}"
+            rec["filename"] = Path(rec["pdf"]).name
+        return {"ok": True, **st}
+
+    @app.post("/api/letter/{job_id}/prepare")
+    def letter_prepare(job_id: str, payload: dict = Body(default={})):
+        from .. import letter as lt
+        c = conn()
+        j = job_or_404(c, job_id)
+        lang = payload.get("language") or None
+        if lang not in (None, "en", "no"):
+            raise HTTPException(400, "language must be en or no")
+        try:
+            p = lt.prepare(cfg(), c, j["id"], lang)
+        except lt.LetterError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=422)
+        return {"ok": True, "prompt": str(p),
+                "ask_claude": f"/cover-letter {j['id']}" + (f" {lang}" if lang else "")}
+
+    @app.get("/api/letter/{job_id}/pdf")
+    def letter_pdf(job_id: str, lang: str = "en"):
+        from .. import letter as lt
+        j = job_or_404(conn(), job_id)
+        rec = lt.load_index().get(j["id"], {}).get(lang)
+        if not rec or not Path(rec["pdf"]).exists():
+            raise HTTPException(404, "No cover letter for this job yet.")
+        p = Path(rec["pdf"]).resolve()
+        if paths.output_dir().resolve() not in p.parents:
+            raise HTTPException(403, "file outside output folder")
+        return FileResponse(p, media_type="application/pdf", filename=p.name)
+
     @app.get("/api/refresh")
     def refresh_status():
         return dict(_refresh)

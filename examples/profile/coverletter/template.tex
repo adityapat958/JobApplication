@@ -1,0 +1,40 @@
+% ============================================================
+%  Cover letter template — JobApplication (fake example person)
+%  One page. The tokens <<NAME>> <<CONTACT>> <<DATE>> <<COMPANY>> <<SUBJECT>>
+%  <<SALUTATION>> <<CLOSING>> are filled in by the tool (name/contact come
+%  from your resume header). The letter text goes between the two
+%  LETTER-BODY markers. Layout knobs are marked with  % <-
+% ============================================================
+\documentclass[11pt, a4paper]{article}   % <- FONT SIZE
+\usepackage[top=0.9in, bottom=0.9in, left=1in, right=1in]{geometry}   % <- MARGINS
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{9pt}   % <- SPACE BETWEEN PARAGRAPHS
+
+\begin{document}
+
+\begin{center}
+    {\Large\bfseries <<NAME>>}\\[3pt]
+    <<CONTACT>>
+\end{center}
+\vspace{4pt}
+
+<<DATE>>
+
+\textbf{<<COMPANY>>}\\
+<<SUBJECT>>
+
+<<SALUTATION>>
+
+% <<LETTER-BODY>>
+% <<LETTER-BODY-END>>
+
+<<CLOSING>>\\[14pt]
+<<NAME>>
+
+\end{document}

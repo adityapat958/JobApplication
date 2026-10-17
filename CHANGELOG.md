@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+- New: tailored cover letter per job (`jobapp letter <id> --prepare/--verify/--accept/--api`, `/cover-letter`,
+  dashboard "Cover letter ✉", MCP `cover_letter_prepare`/`cover_letter_submit`). Claude writes the body; code
+  checks every number and name against the resume/ad, company + role, length, one page, banned phrases, matched
+  keywords, language (en/no) and placeholders. Output: `…_CoverLetter.pdf` + `.txt`. Profile files in
+  `coverletter/` (`jobapp coverletter init` for existing profiles). Obsidian notes get a `cover_letter:` key.
+
 ## v0.1.3
 - Fix: the dashboard stopped working when Claude started it. `jobapp serve` ran in the foreground, so Claude's
   command time limit killed it (or Claude waited forever). New `jobapp serve --background` starts it detached,
