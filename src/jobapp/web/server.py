@@ -73,7 +73,7 @@ def create_app(poll_fn=None) -> FastAPI:
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": __version__}
+        return {"ok": True, "app": "jobapp", "version": __version__}
 
     @app.get("/api/jobs")
     def jobs(hidden: bool = True):
