@@ -84,25 +84,38 @@ def check_config() -> tuple[Check, config_mod.Config | None]:
 
 
 def check_resume(cfg: config_mod.Config) -> Check:
-    tex = cfg.resolve(cfg.resume.tex)
-    kw = cfg.resolve(cfg.resume.keywords)
+    from .resume.variants import names, resume_for
+    out = None
+    for name in (names(cfg) or [None]):
+        r = resume_for(cfg, name)
+        c = _check_one_resume(r.tex, r.keywords, f"Resume ({name})" if name else "Resume")
+        if c.status != OK:
+            return c
+        out = c
+    if names(cfg):
+        return Check("Resume", OK, f"{len(names(cfg))} variants: {', '.join(names(cfg))} "
+                     f"(default {cfg.resume.default_variant})")
+    return out
+
+
+def _check_one_resume(tex, kw, label: str) -> Check:
     if not tex.exists():
-        return Check("Resume", FAIL, f"{tex} not found",
+        return Check(label, FAIL, f"{tex} not found",
                      "Put your resume at that path, or import a Word file with 'jobapp resume import'.")
     if not kw.exists():
-        return Check("Resume", FAIL, f"{kw} not found", "Create a keyword list (copy the example from 'jobapp init').")
+        return Check(label, FAIL, f"{kw} not found", "Create a keyword list (copy the example from 'jobapp init').")
     from .resume.build import check_markers
     from .resume.keywords import Bank
     try:
         check_markers(tex.read_text(encoding="utf-8"))
     except ValueError as e:
-        return Check("Resume", FAIL, str(e),
+        return Check(label, FAIL, str(e),
                      "The resume needs the SKILLS marker comments so the Skills lines can be tailored.")
     try:
         Bank.load(kw)
     except ValueError as e:
-        return Check("Resume keywords", FAIL, str(e), "Fix keywords.yaml (see the example from 'jobapp init').")
-    return Check("Resume", OK, str(tex))
+        return Check(label + " keywords", FAIL, str(e), "Fix keywords.yaml (see the example from 'jobapp init').")
+    return Check(label, OK, str(tex))
 
 
 def check_db() -> Check:

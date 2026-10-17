@@ -25,7 +25,7 @@ function show(j){document.getElementById('match').innerHTML=j.match_pct==null?'N
   `Match ${Math.round(j.match_pct)}% · matched: ${esc((j.matched||[]).join(', ')||'–')}<br>In the ad but not in your keywords: ${esc((j.missing||[]).slice(0,15).join(', ')||'–')}`}
 async function load(){const j=await (await fetch('/api/jobs/'+ID)).json();
   document.getElementById('h').textContent=j.company+' — '+j.title;
-  document.getElementById('meta').innerHTML=`${esc(j.location)} · ${esc(j.source)}${(j.also_on||[]).map(a=>` (also on <a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.source)}</a>)`).join('')} · status ${esc(j.status)} · <a href="${esc(j.apply_url||j.url)}" target="_blank" rel="noopener">open ad ↗</a>`;
+  document.getElementById('meta').innerHTML=`${esc(j.location)} · ${esc(j.source)}${(j.also_on||[]).map(a=>` (also on <a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.source)}</a>)`).join('')} · status ${esc(j.status)}${j.variant?` · resume ${esc(j.variant)}${j.variant_chosen?'':' (auto)'}`:''} · <a href="${esc(j.apply_url||j.url)}" target="_blank" rel="noopener">open ad ↗</a>`;
   document.getElementById('jd').value=j.description||'';document.getElementById('notes').value=j.notes||'';show(j)}
 async function save(){const r=await fetch('/api/jobs/'+ID+'/description',{method:'POST',headers:H,body:JSON.stringify({description:document.getElementById('jd').value})});
   const d=await r.json();document.getElementById('res').textContent=d.ok?'Saved.':'Error: '+d.error;if(d.ok)show(d)}

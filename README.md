@@ -61,6 +61,7 @@ uv run jobapp mark <id> applied        # keep track
 uv run jobapp serve --background       # dashboard in your browser (keeps running; --stop to stop)
 uv run jobapp schedule install         # search automatically at the times in config.yaml
 uv run jobapp connectors sync obsidian # optional: one note per job in Obsidian (see below)
+uv run jobapp rescore                  # after editing keywords.yaml
 ```
 Your settings are in `~/JobApplication-data/config.yaml`; after editing run `uv run jobapp config validate` —
 it explains mistakes and suggests the right spelling. Filter words match whole words; add `*` for
@@ -106,7 +107,42 @@ what it would do first). After that every search adds notes for new jobs and kee
 fields at the top and the "Applied" tick box. You can rename or move notes; they are found by `job_id`.
 Extras: `two_way: true` lets you change a job's status in the note (or tick "Applied") and have it show up
 here at the next search; `git_push: true` commits the Jobs folder (and pushes it) if your vault uses git;
-`min_match: 40` only writes notes for good matches.
+`min_match: 40` only writes notes for good matches; `one_note_per_title: true` keeps one note per company + title
+(reposts share it). The two generated notes can have other names
+(`dashboard_file: "_JobApplication Dashboard.md"`, `new_today_file: ...`); an existing file at that name that
+JobApplication didn't make is never overwritten (`doctor` says so; `connectors sync obsidian --adopt-dashboards`
+replaces it on purpose).
+
+## Several resumes (optional)
+Have two versions of your resume (say one for robotics jobs and one for ML jobs)? List them in `config.yaml`:
+```yaml
+resume:
+  variants:
+    perception: {tex: resume/perception.tex, keywords: resume/keywords.yaml, prefer_if: [perception, vision, slam, "robot*"]}
+    mle:        {tex: resume/mle.tex,        keywords: resume/keywords.yaml, prefer_if: [machine learning, ml, llm]}
+  default_variant: perception
+```
+Each job uses the resume whose `prefer_if` words best fit its title (then its description), else the default.
+Choose yourself with `uv run jobapp build <id> --variant mle` (remembered for that job; `--variant auto` goes
+back to automatic) or the "Resume" drop-down on the dashboard. `list`/`show` show which one a job uses.
+
+## Keyword match
+`matched` = words from your `keywords.yaml` found in the ad. `missing` = skills from a built-in vocabulary
+(`src/jobapp/resume/skills_vocab.yaml`: tech, business/analytics, Norwegian equivalents) that the ad mentions
+and your list doesn't have — never names, slogans or "About us" text. Add your own terms to it in
+`keywords.yaml`:
+```yaml
+extra_vocab:
+  Foxglove: []
+  Isaac ROS: [isaac-ros]
+```
+After editing keywords run `uv run jobapp rescore`.
+
+## Moving from the older jobdesk tracker
+`uv sync --extra mongo`, then `uv run jobapp migrate --from-mongo --dry-run` (and without `--dry-run`) copies the
+jobs from its Mongo database (read-only; safe to run again). Status, applied date, saved job descriptions, the
+resume variant, the date found and each job's existing Obsidian note are kept; the next search recognises the
+same LinkedIn/Simplify jobs instead of adding copies. Contacts and messages stay in the old system.
 
 ## Claude Desktop
 JobApplication includes an MCP server, so Claude Desktop can use it too. Print your personal config snippet:

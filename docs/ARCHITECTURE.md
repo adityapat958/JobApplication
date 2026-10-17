@@ -32,7 +32,7 @@
 | `web/` | Dashboard (FastAPI + one HTML page). POSTs need `X-JobApp: 1`; Host must be localhost. |
 | `agent/` | MCP tools (plain functions) + the MCP server wrapper. |
 | `connectors/` | `Connector` protocol; `NullConnector`, `jsonl` reference, `obsidian`. Failures go to `logs/connector_errors.json` (shown by `doctor`), never fatal. Optional hooks: `pull` (+ `two_way`), `after_poll(conn)`, `doctor()`. State (last sync, conflicts) in `logs/connector_state.json`. |
-| `connectors/obsidian.py` | One note per job (`Company — Title.md`, layout of the old hand-made notes + `job_id`, `match`, `matched`, `missing`, `url`, `also_on`). Notes found by frontmatter `job_id`, else file name (older notes without id are adopted, their status taken over once by `sync`). Updates touch only managed keys + the "Applied" box (semantic compare, so Obsidian's YAML style never causes rewrites); atomic writes. `_Dashboard.md`/`_New Today.md` regenerated; optional git commit/push of the folder. Two-way: note status/box → DB via `db.mark` only if the note's mtime is newer than `jobs.status_updated_at`; otherwise DB wins and the conflict is recorded. |
+| `connectors/obsidian.py` | One note per job (`Company — Title.md`, layout of the old hand-made notes + `job_id`, `match`, `matched`, `missing`, `url`, `also_on`). Notes found by frontmatter `job_id`, else file name (older notes without id are adopted, their status taken over once by `sync`). Updates touch only managed keys + the "Applied" box (semantic compare, so Obsidian's YAML style never causes rewrites); atomic writes. `_Dashboard.md`/`_New Today.md` (names configurable) regenerated — an existing file without the generated header (and not the old exporter's dashboard) is never overwritten (connector error; `--adopt-dashboards`); optional git commit/push of the folder. Two-way: note status/box → DB via `db.mark` only if the note's mtime is newer than `jobs.status_updated_at`; otherwise DB wins and the conflict is recorded. |
 | `schedule.py`, `platform.py`, `secrets.py` | launchd/cron, Finder reveal, Keychain/.env. |
 | `doctor.py`, `bugreport.py` | Health checks with hints; redacted bug-report zip. |
 
@@ -47,15 +47,38 @@
 - Personal data lives only under `JOBAPP_HOME`; `scripts/privacy_scan.sh` (run by the tests) keeps the repo clean.
 
 ## Matching
-`match_pct = matched / max(matched + missing, 6)`. `matched` = bank keywords (or aliases) found in the JD,
-word-boundary, accent/hyphen-insensitive, plural-tolerant. `missing` = Title-Case/ACRONYM/CamelCase runs in the
-JD that aren't in the bank (minus company, places, stopwords). The contact block (Kontaktperson / Contact /
-Spørsmål om stillingen, phone and e-mail lines) is removed first (`text.strip_contact`), and the contact
-person's name is ignored anywhere in the ad. No JD → `match_pct` NULL ("manual JD").
+`match_pct = matched / max(matched + missing, 6)`. `matched` = bank keywords (or aliases, or skills-vocabulary
+aliases of a bank keyword — e.g. "maskinlæring" → "Machine Learning") found in the JD, word-boundary,
+accent/hyphen-insensitive, plural-tolerant. `missing` = terms of the curated skills vocabulary
+(`resume/skills_vocab.yaml`, groups of `Term: [aliases]`, `=Term` = case-sensitive; + `extra_vocab:` in
+keywords.yaml, `resume/vocab.py`) that the JD mentions and the bank doesn't cover (a term is covered when it or an
+alias equals a bank keyword/alias, or is a phrase inside one: "Object Detection" ⊂ "Object Detection and
+Tracking"). Before matching (`matching.clean_jd`): `text.strip_contact` removes contact / "Meet the hiring team" /
+"please contact" blocks and the people named there; `text.strip_boilerplate` drops About us / Om oss / Vi tilbyr /
+benefits / EEO / LinkedIn page-chrome sections (until the next heading, max two paragraphs), EEO/benefit/funding
+sentences, URLs, e-mails and phone numbers. No JD → `match_pct` NULL ("manual JD"). `jobapp rescore` /
+`resume.rescore.rescore_all` recompute everything (migration 004 does it once for the active profile).
+
+Resume variants (`resume/variants.py`): `resume.variants` {name: tex, keywords, prefer_if}; per job
+`jobs.variant` (user's choice, migration 004) → else most `prefer_if` hits in the title, then in the JD (ties →
+`default_variant`) → else `default_variant`. The `Matcher` scores each job with its variant's bank; the build
+uses its variant's .tex.
 
 Sort by match = `match_pct` desc → `title_score` desc → posted desc. `title_score` (`filters.title_score`) = weight
 of the best `title_include` term the title hits: words + length (specific multi-word terms win); generic terms
 (graduate, trainee, junior, intern*) weigh 0.25.
+
+## Importing from the older tracker (`migrate_mongo.py`)
+Old `jobdesk.jobs` documents → rows (read-only on Mongo; one transaction; `--dry-run` rolls back). LinkedIn →
+`source_id` = the LinkedIn job id (a poll computes the same `id`); Simplify without a `simplify.jobs/p/<id>` link →
+`legacy:<old id>` + `legacy_url_key` (normalised apply link). `db.find_existing` (used by poll/upsert) adopts such
+a row on the first poll that lists the same link (by title when one link has several imported jobs; else the only
+imported row with the same company+title+location) and gives it the new `source_id`. Kept: status, done/done_at,
+JD (+ `jd_saved_at` if hand-saved), variant, `date_found` → `first_seen_at` (midday UTC), tier (in `raw`), old id
+(`legacy_id`), note path (`note_path`). Old documents of one listing (same LinkedIn id, or same link+place+title)
+become one row. Rows already imported are never changed (rerun = 0 changes). Then dedupe, re-filter, re-score.
+The Obsidian connector gives an imported job exactly its old note (the stored path, mapped below the configured
+jobs folder if the vault moved/was copied — never a path outside it) and never creates a second note for it.
 
 ## Cross-source duplicates
 `db/dedupe.py`: `dedupe_key` = normalised company (no AS/ASA/AB/Inc/Ltd/LLC/GmbH/Norge/Norway/Bank/Group,

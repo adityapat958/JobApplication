@@ -1,11 +1,45 @@
 # Changelog
 
-## Unreleased
+## v0.1.5
 - New: tailored cover letter per job (`jobapp letter <id> --prepare/--verify/--accept/--api`, `/cover-letter`,
   dashboard "Cover letter ✉", MCP `cover_letter_prepare`/`cover_letter_submit`). Claude writes the body; code
   checks every number and name against the resume/ad, company + role, length, one page, banned phrases, matched
   keywords, language (en/no) and placeholders. Output: `…_CoverLetter.pdf` + `.txt`. Profile files in
   `coverletter/` (`jobapp coverletter init` for existing profiles). Obsidian notes get a `cover_letter:` key.
+
+## v0.1.4
+**Cleaner "missing" keywords**
+- `missing` now lists only real skills: terms from a built-in skills vocabulary (`skills_vocab.yaml`, ~360
+  tech / business / analytics terms with aliases and Norwegian equivalents) that the ad mentions and your
+  keyword list doesn't have. No more recruiter names, slogans, "About us" or benefits text. Add your own terms
+  with `extra_vocab:` in `keywords.yaml`.
+- Before matching, contact and "Meet the hiring team" blocks, About us / Om oss / Vi tilbyr / benefits / equal
+  opportunity text, funding blurbs, links, e-mails and phone numbers are removed.
+- Norwegian words in an ad now count for the matching English skill you have ("maskinlæring" → Machine Learning).
+- `jobapp rescore` says how many jobs changed; the database upgrade re-scores your jobs once.
+
+**Several resumes**
+- Optional `resume.variants` + `default_variant`: each job uses the resume whose `prefer_if` words fit it best.
+  Pick one yourself with `jobapp build <id> --variant <name>` (or `auto`), the dashboard's "Resume" drop-down,
+  or Claude Desktop (`build_resume(variant=...)`). `list`, `show`, the dashboard and Claude show the choice.
+  One-resume setups work as before.
+
+**Moving from the older jobdesk tracker**
+- `jobapp migrate --from-mongo [--uri ... --db ...] [--dry-run]` (needs `uv sync --extra mongo`): imports the
+  old jobs read-only and keeps status, applied date, saved job descriptions, resume variant, date found and the
+  existing Obsidian note of each job. Running it again changes nothing; the next search finds the same
+  LinkedIn/Simplify jobs instead of adding copies. Contacts and messages are not imported.
+
+**Obsidian**
+- `dashboard_file` / `new_today_file` name the two generated notes. An existing file at that name that wasn't
+  made by JobApplication (or the old exporter) is never overwritten — `doctor` reports it;
+  `connectors sync obsidian --adopt-dashboards` replaces it on purpose.
+- An imported job gets exactly its old note, and never a second one.
+- `one_note_per_title: true`: a repost (same company + title, new listing id) shares the existing note instead
+  of getting a "Company — Title (abc123)" copy (like the old exporter).
+
+**Other**
+- Database migration 004: `variant`, `legacy_id`, `note_path`, `legacy_url_key`.
 
 ## v0.1.3
 - Fix: the dashboard stopped working when Claude started it. `jobapp serve` ran in the foreground, so Claude's

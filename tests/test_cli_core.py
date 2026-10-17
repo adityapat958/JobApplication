@@ -37,7 +37,7 @@ def test_validate_reports_problem(jobapp_home):
 
 def test_version():
     r = runner.invoke(app, ["version"])
-    assert "0.1.3" in r.output
+    assert "0.1.5" in r.output
 
 
 def test_home_env(jobapp_home):

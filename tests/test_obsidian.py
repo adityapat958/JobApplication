@@ -594,3 +594,101 @@ def test_job_id_read_as_text_even_if_unquoted():
     text = "---\njob_id: 12e4567890\nstatus: new\n---\nbody"
     assert ob.note_job_id(text) == "12e4567890" and ob.note_state(text)["job_id"] == "12e4567890"
     assert ob.note_job_id("---\njob_id: '0012345678'\n---\n") == "0012345678"
+
+
+# ── dashboard file names + never overwrite someone else's file ───────────
+OLD_DASH = "# 🚀 Job Search Dashboard\n\n> Updated: 2026-10-17 09:00\n\n## 📊 Stats\n\n| Metric | Count |\n"
+OLD_TODAY = "# 📬 New Jobs — 2026-10-17\n\n**11 new roles** | 9 full-time | 2 internships\n"
+
+
+def test_dashboard_names_configurable(profile, tmp_path):
+    cfg, vault = make_cfg(tmp_path, dashboard_file="_JobApplication Dashboard.md", new_today_file="_JA New.md")
+    jobs = vault / "Jobs"
+    jobs.mkdir()
+    (jobs / "_Dashboard.md").write_text("my own dataview dashboard\n")
+    (jobs / "_Kanban.md").write_text("---\nkanban-plugin: board\n---\n")
+    before = files(jobs)
+    conn = db.connect()
+    add(conn, "d1")
+    res = conn_for(cfg).sync(conn)
+    assert {p.name for p in res["generated"]} == {"_JobApplication Dashboard.md", "_JA New.md"}
+    assert "[[Jobs/_JA New\\|New Today]]" in (jobs / "_JobApplication Dashboard.md").read_text()
+    after = files(jobs)
+    for k in before:
+        assert after[k] == before[k]
+    assert res["blocked"] == []
+    # generated notes are not mistaken for job notes
+    assert all(p.name not in ("_JobApplication Dashboard.md", "_JA New.md") for p in conn_for(cfg).notes())
+
+
+def test_existing_foreign_dashboard_never_overwritten(profile, tmp_path):
+    cfg, vault = make_cfg(tmp_path)
+    jobs = vault / "Jobs"
+    jobs.mkdir()
+    mine = "```dataview\nTABLE status FROM \"Jobs\"\n```\n"
+    (jobs / "_Dashboard.md").write_text(mine)
+    conn = db.connect()
+    add(conn, "d2")
+    res = conn_for(cfg).sync(conn)
+    assert (jobs / "_Dashboard.md").read_text() == mine
+    assert [p.name for p in res["blocked"]] == ["_Dashboard.md"]
+    assert [p.name for p in res["generated"]] == ["_New Today.md"]
+    with pytest.raises(ob.DashboardBlocked, match="dashboard_file"):
+        conn_for(cfg).raise_blocked(res)
+    # the poll records it as a connector error (shown by doctor) and doesn't fail
+    connectors.after_poll(cfg, conn)
+    errs = json.loads((connectors._errors_file()).read_text())
+    assert "not overwriting _Dashboard.md" in errs["obsidian"]["error"]
+    assert (jobs / "_Dashboard.md").read_text() == mine
+    # the CLI warns; --adopt-dashboards replaces it on purpose
+    from jobapp.cli import app
+    import yaml
+    from jobapp import paths
+    data = yaml.safe_load(paths.config_path().read_text())
+    data["connectors"] = {"obsidian": {"enabled": True, "vault": str(vault)}}
+    paths.config_path().write_text(yaml.safe_dump(data))
+    r = CliRunner().invoke(app, ["connectors", "sync", "obsidian"])
+    assert "not overwriting _Dashboard.md" in r.output and (jobs / "_Dashboard.md").read_text() == mine
+    r = CliRunner().invoke(app, ["connectors", "sync", "obsidian", "--adopt-dashboards"])
+    assert r.exit_code == 0 and (jobs / "_Dashboard.md").read_text().startswith(ob.GEN_MARK)
+
+
+def test_old_exporter_dashboards_are_replaced(profile, tmp_path):
+    cfg, vault = make_cfg(tmp_path)
+    jobs = vault / "Jobs"
+    jobs.mkdir()
+    (jobs / "_Dashboard.md").write_text(OLD_DASH)
+    (jobs / "_New Today.md").write_text(OLD_TODAY)
+    conn = db.connect()
+    add(conn, "d3")
+    res = conn_for(cfg).sync(conn)
+    assert res["blocked"] == [] and len(res["generated"]) == 2
+    assert (jobs / "_Dashboard.md").read_text().startswith(ob.GEN_MARK)
+    assert ob.is_replaceable(OLD_DASH) and not ob.is_replaceable("# 🚀 Job Search Dashboard\nmine")
+
+
+def test_dashboard_name_validation():
+    for bad in ("x.txt", "sub/x.md", ".hidden.md", ""):
+        with pytest.raises(config.ConfigError):
+            config.parse({"connectors": {"obsidian": {"dashboard_file": bad}}})
+    with pytest.raises(config.ConfigError, match="different"):
+        config.parse({"connectors": {"obsidian": {"dashboard_file": "a.md", "new_today_file": "A.md"}}})
+
+
+def test_one_note_per_title(profile, tmp_path):
+    cfg, vault = make_cfg(tmp_path, one_note_per_title=True)
+    conn = db.connect()
+    a = add(conn, "801", company="Nordlys AS", title="Data Analyst")
+    b = add(conn, "802", company="Nordlys AS", title="Data Analyst")           # repost, other id
+    d = add(conn, "803", company="Nordlys", title="Data Analyst (m/f/d)")      # same job after normalising
+    e = add(conn, "804", company="Nordlys AS", title="Data Analyst, Credit")   # a different job
+    c = conn_for(cfg)
+    res = c.sync(conn, dry_run=True)
+    assert len(res["created"]) == 3 and len(res["shared"]) == 1  # 803's name differs: own note
+    res = c.sync(conn)
+    names = sorted(p.name for p in (vault / "Jobs" / "Full-Time").iterdir())
+    assert names == ["Nordlys AS — Data Analyst, Credit.md", "Nordlys AS — Data Analyst.md",
+                     "Nordlys — Data Analyst (mfd).md"]
+    assert [j for j, _ in res["shared"]] == [b["id"]] or [j for j, _ in res["shared"]] == [a["id"]]
+    assert c.sync(conn)["created"] == []
+    assert e and d

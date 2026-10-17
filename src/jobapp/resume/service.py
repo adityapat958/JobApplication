@@ -36,6 +36,7 @@ class BuildResult:
     tech: list[str]
     pages: int | None = None
     warnings: list[str] = field(default_factory=list)
+    variant: str | None = None
 
 
 _TRANS = str.maketrans({"æ": "ae", "Æ": "Ae", "ø": "o", "Ø": "O", "å": "a", "Å": "A", "ß": "ss"})
@@ -93,16 +94,25 @@ def _copy_assets(src_dir: Path, dst: Path) -> None:
 
 
 def build_pdf(cfg, *, company: str, role: str, description: str | None, title: str = "",
-              location: str = "", out_dir: Path | None = None, dry_run: bool = False) -> BuildResult:
-    tex_path = cfg.resolve(cfg.resume.tex)
+              location: str = "", out_dir: Path | None = None, dry_run: bool = False,
+              variant: str | None = None) -> BuildResult:
+    """variant: with resume.variants, the resume to use (None = pick from the title/description)."""
+    from .variants import auto_pick, resume_for
+    job = {"description": description, "title": title or role, "company": company, "location": location}
+    if cfg.resume.variants and variant is None:
+        variant = auto_pick(cfg, job)
+    try:
+        res = resume_for(cfg, variant if cfg.resume.variants else None)
+    except KeyError:
+        raise BuildError(f"'{variant}' isn't one of your resumes ({', '.join(cfg.resume.variants)}).") from None
+    tex_path = res.tex
     if not tex_path.exists():
         raise BuildError(f"Your resume file wasn't found at {tex_path}.")
     try:
-        bank = Bank.load(cfg.resolve(cfg.resume.keywords))
+        bank = Bank.load(res.keywords)
     except ValueError as e:
         raise BuildError(str(e)) from None
-    m = Matcher(bank).score_job({"description": description, "title": title or role,
-                                 "company": company, "location": location})
+    m = Matcher(bank).score_job(job)
     original = tex_path.read_text(encoding="utf-8")
     try:
         t = tailor(original, bank, m.core, m.tech)
@@ -115,7 +125,7 @@ def build_pdf(cfg, *, company: str, role: str, description: str | None, title: s
     if not description:
         warnings.append("No job description saved, so only the job title was used for keywords.")
     if dry_run:
-        return BuildResult(out_dir / f"{name}.pdf", m.matched, m.missing, t.core, t.tech, None, warnings)
+        return BuildResult(out_dir / f"{name}.pdf", m.matched, m.missing, t.core, t.tech, None, warnings, variant)
     engine = texmod.detect()
     if engine is None:
         raise BuildError("No LaTeX engine found. On a Mac run 'brew install tectonic' (or ask Claude to set it up).")
@@ -136,16 +146,31 @@ def build_pdf(cfg, *, company: str, role: str, description: str | None, title: s
     if target and pages != target:
         warnings.append(f"The tailored resume has {pages} page(s) but your original has {target}. "
                         "Check it before sending.")
-    return BuildResult(dest, m.matched, m.missing, t.core, t.tech, pages, warnings)
+    return BuildResult(dest, m.matched, m.missing, t.core, t.tech, pages, warnings, variant)
 
 
 def build_for_job(cfg, conn, job_id: str) -> BuildResult:
+    from .variants import pick
     job = db.get_job(conn, job_id)
     if not job:
         raise BuildError(f"No job with id '{job_id}'.")
     res = build_pdf(cfg, company=job["company"] or "Company", role=job["title"] or "Role",
-                    description=job.get("description"), title=job["title"] or "", location=job["location"] or "")
+                    description=job.get("description"), title=job["title"] or "", location=job["location"] or "",
+                    variant=pick(cfg, job))
     db.add_build(conn, job["id"], str(res.pdf), res.matched)
     from ..connectors import notify_updated
     notify_updated(cfg, db.get_job(conn, job["id"]), {"built": str(res.pdf)})
     return res
+
+
+def choose_variant(cfg, conn, job_id: str, name: str | None) -> dict:
+    """Save which resume a job uses ('auto'/None = automatic) and re-score it. ValueError on a bad name."""
+    from .rescore import rescore_all
+    from .variants import validate_choice
+    job = db.get_job(conn, job_id)
+    if not job:
+        raise ValueError(f"No job with id '{job_id}'.")
+    v = validate_choice(cfg, name)
+    db.set_variant(conn, job["id"], v)
+    rescore_all(cfg, conn, ids=[job["id"]])
+    return db.get_job(conn, job["id"])

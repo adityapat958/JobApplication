@@ -318,6 +318,16 @@ PHASE fix/v0.1.1: DONE
   notes are never moved when a job's type changes; notes for deleted DB jobs are left alone.
 PHASE feat/obsidian: DONE
 
+## Cutover release v0.1.4 (feat/cutover)
+- Merged main (v0.1.3 dashboard hotfix: `serve --background`, MCP `open_dashboard`, /setup without Obsidian) into
+  feat/cutover; the branch's release notes are now v0.1.4 (version, lock, test, CHANGELOG; v0.1.3 entry kept).
+- Tests: offline 350 passed; `pytest -m live` 3 passed; privacy scan clean; branch diff has no personal data.
+- Rehearsal for test user A on copies (profile + vault copy outside the repo): import 3943 old records → 3817
+  jobs (126 duplicates merged), statuses kept; first sync adopts 3816 existing notes (frontmatter only, 0 deleted,
+  0 created); repeat syncs/polls change nothing; first poll adds 33 notes and no duplicates of imported jobs;
+  `missing` drops from ~8 to ~0.2 terms per job with no names. Rollback script tested on a copy (Jobs/ part).
+- Open: merge to main + tag v0.1.4, then run the cutover plan (outside the repo) on the real system.
+
 ## feat/cover-letter — tailored cover letter per job
 - Branch `feat/cover-letter` off `main` (v0.1.3), own worktree. No migration: letters are files under
   `letters/<id>/` + `letters/index.json` in the profile.
