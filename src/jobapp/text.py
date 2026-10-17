@@ -185,8 +185,11 @@ def parse_iso(s: str | None) -> datetime | None:
 _CONTACT_HEAD = re.compile(
     r"^\W*(kontaktpersoner|kontaktperson|kontaktinformasjon|kontakt oss|kontakt|contact persons?|"
     r"contact information|contact details|contact us|contacts?|spørsmål om stillingen|"
-    r"questions about (?:the|this) (?:position|role|job))\b\s*:?\s*(.*)$", re.I)
-_ALWAYS_CONTACT = re.compile(r"^\W*(spørsmål om stillingen|questions about (?:the|this) (?:position|role|job))", re.I)
+    r"questions about (?:the|this) (?:position|role|job)|meet the hiring team|hiring team|job poster|"
+    r"posted by|if you have (?:any )?questions|for (?:more information|questions)|"
+    r"har du spørsmål|ved spørsmål|for mer informasjon)\b\s*:?\s*(.*)$", re.I)
+_ALWAYS_CONTACT = re.compile(r"^\W*(spørsmål om stillingen|questions about (?:the|this) (?:position|role|job)|"
+                             r"meet the hiring team|job poster\b)", re.I)
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 # Norwegian 8-digit numbers (with or without +47 and spaces), US (NNN) NNN-NNNN — but not "2024-2026"
 _PHONE = re.compile(r"(?<![\w-])(?:\+\d{1,3}[\s.]?\d[\d\s.-]{6,}\d|\d{8}|\d{2,3}(?:[\s.]\d{2,3}){3}|\d{3}[\s.]\d{2}[\s.]\d{3}"
@@ -243,3 +246,74 @@ def strip_contact(text: str | None) -> tuple[str, list[str]]:
     for n in names:  # the same person mentioned elsewhere in the ad
         out = re.sub(r"\b" + re.escape(n).replace(r"\ ", r"\s+") + r"\b", "\n", out)
     return out, names
+
+
+# ── ad boilerplate (not about the job's skills) ───────────
+_BOILER_HEAD = re.compile(
+    r"^\W*(about us|about the company|who we are|our company|our story|why join us|why work (?:with|for) us|"
+    r"what we offer|we offer|what's in it for you|what you(?:'| wi)ll get|our benefits|benefits(?: and perks)?|"
+    r"perks(?: and benefits)?|compensation(?: and benefits)?|pay transparency|salary|"
+    r"equal (?:employment )?opportunit(?:y|ies)(?: employer| statement)?|eeo(?: statement)?|diversity(?:,| and| &)? .*inclusion|"
+    r"reasonable accommodations?|accommodations?|e-verify|export control.*|privacy (?:notice|policy)|"
+    r"notice to (?:recruiters|recruitment agencies|agencies)|recruiting agencies|additional information|"
+    r"vi tilbyr|vi kan tilby|dette tilbyr vi|hva vi tilbyr|hva tilbyr vi|om oss|om selskapet|om arbeidsgiver\w*|"
+    r"om \w+ (?:as|asa|group|konsernet)|hvem er vi|mangfold.*|likestilling.*|lønn og betingelser|"
+    r"seniority level|employment type|job function|industries|referrals increase your chances.*|"
+    r"show more|show less|see who you know|get notified about new .*|sign in to .*)\s*[:.!]?\s*$", re.I)
+_BOILER_INLINE = re.compile(r"^\W*(about us|om oss|vi tilbyr|what we offer|benefits|equal opportunit(?:y|ies))\s*:\s*\S", re.I)
+_BOILER_LINE = re.compile(
+    r"(equal opportunity employer|equal employment opportunity|without regard to (?:race|age|sex)|"
+    r"protected (?:veteran|characteristic)|sexual orientation|gender identity|national origin|"
+    r"reasonable accommodation|e-verify|pay transparency|base (?:pay|salary) range|salary range|"
+    r"(?:401\(?k\)?|dental|medical|vision) (?:insurance|plan|benefits|coverage)|paid time off|"
+    r"visa sponsorship|background check|drug[- ]free|affirmative action|"
+    r"cookies?\b.*(?:accept|policy)|privacy policy|"
+    r"\bseries [a-f]\b.*\b(?:funding|round|valuation|raised)|\braised \$|\$[\d.,]+ ?(?:million|billion|[mb])\b.*\b(?:valuation|funding|round)|"
+    r"oppfordrer (?:alle )?kvalifiserte|uavhengig av (?:kjønn|alder|etnisitet)|offentlighetsloven|"
+    r"søkerliste|pensjonsordning|forsikringsordning|konkurransedyktig lønn)", re.I)
+_URL = re.compile(r"(?:https?://|www\.)\S+", re.I)
+
+
+def _heading_like(s: str) -> bool:
+    if not s or s.startswith(("•", "-", "*", "–")):
+        return False
+    w = s.split()
+    return len(w) <= 8 and not s.rstrip().endswith((".", ",", ";")) and (s[0].isupper() or s[0].isdigit()
+                                                                            or s.endswith(":"))
+
+
+def strip_boilerplate(text: str | None) -> str:
+    """Drop ad sections that aren't about the job's skills (About us / Vi tilbyr / benefits / EEO / LinkedIn
+    page chrome), boilerplate sentences, URLs, e-mails and phone numbers. A dropped section ends at the next
+    heading-like line, or after two paragraphs."""
+    if not text:
+        return text or ""
+    out: list[str] = []
+    in_sec = False
+    paras = 0
+    prev_blank = False
+    for line in text.splitlines():
+        s = line.strip()
+        if _BOILER_HEAD.match(s) or _BOILER_INLINE.match(s):
+            in_sec, paras, prev_blank = True, 0, False
+            continue
+        if in_sec:
+            if not s:
+                if not prev_blank:
+                    paras += 1
+                prev_blank = True
+                if paras >= 2:
+                    in_sec = False
+                continue
+            prev_blank = False
+            if _heading_like(s) and not s.startswith(("•", "-", "*")):
+                in_sec = False
+            else:
+                continue
+        if _BOILER_LINE.search(s):
+            continue
+        line = _URL.sub(" ", line)
+        line = _EMAIL.sub(" ", line)
+        line = _PHONE.sub(" ", line)
+        out.append(line)
+    return "\n".join(out)

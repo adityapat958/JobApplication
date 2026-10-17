@@ -160,9 +160,13 @@ def list_cmd(status: Optional[str] = typer.Option(None, "--status"),
     conn = _conn()
     rows = db.list_jobs(conn, status=status, min_match=min_match, only_hidden=hidden, query=search,
                         order=sort, limit=limit, title_include=config_mod.title_include())
+    vcfg = _variant_cfg()
+    for r in rows:
+        r["variant"] = _variant_of(vcfg, r)
     if as_json:
         print(json.dumps([{k: r[k] for k in ("id", "company", "title", "location", "source", "posted_at",
-                                              "match_pct", "title_score", "status", "hidden_reason", "url")}
+                                              "match_pct", "title_score", "status", "hidden_reason", "url",
+                                              "variant")}
                           | {"also_on": [a["source"] for a in r["also_on"]]} for r in rows],
                          indent=2, ensure_ascii=False))
         return
@@ -170,7 +174,10 @@ def list_cmd(status: Optional[str] = typer.Option(None, "--status"),
         con.print("No jobs yet." if not hidden else "No hidden jobs.")
         return
     t = Table(show_lines=False)
-    for col in ("id", "company", "title", "location", "source", "posted", "match", "status"):
+    cols = ["id", "company", "title", "location", "source", "posted", "match", "status"]
+    if vcfg:
+        cols.append("resume")
+    for col in cols:
         t.add_column(col)
     if hidden:
         t.add_column("why hidden")
@@ -180,10 +187,31 @@ def list_cmd(status: Optional[str] = typer.Option(None, "--status"),
         src = r["source"] + "".join(f" +{a['source']}" for a in r.get("also_on") or [])
         cells = [r["id"], r["company"] or "", r["title"] or "", r["location"] or "", src, posted,
                  match, r["status"]]
+        if vcfg:
+            cells.append(r["variant"] + ("" if r.get("variant_chosen") else "*"))
         if hidden:
             cells.append(r["hidden_reason"] or "")
         t.add_row(*cells)
     con.print(t)
+    if vcfg:
+        con.print("[dim]resume: * = picked automatically; change with 'jobapp build <id> --variant <name>'[/dim]")
+
+
+def _variant_cfg():
+    """The config if it has resume variants, else None (list/show still work without a valid config)."""
+    try:
+        cfg = config_mod.load()
+    except Exception:  # noqa: BLE001
+        return None
+    return cfg if cfg.resume.variants else None
+
+
+def _variant_of(cfg, job: dict) -> str | None:
+    if cfg is None:
+        return None
+    from .resume.variants import pick
+    job["variant_chosen"] = bool(job.get("variant") and job["variant"] in cfg.resume.variants)
+    return pick(cfg, job)
 
 
 @app.command()
@@ -201,6 +229,11 @@ def show(job_id: str):
     from .filters import title_score
     con.print(f"  title_score: {title_score(j.get('title'), config_mod.title_include()):g}"
               "  (how well the title fits your title_include words)")
+    vcfg = _variant_cfg()
+    if vcfg:
+        v = _variant_of(vcfg, j)
+        con.print(f"  resume: {v} ({'your choice' if j['variant_chosen'] else 'picked automatically'}; "
+                  f"options: {', '.join(vcfg.resume.variants)})")
     if j.get("match_pct") is not None:
         con.print(f"  match: {j['match_pct']:.0f}%")
         con.print(f"  matched: {', '.join(j['matched']) or '-'}")
@@ -242,28 +275,34 @@ def mark(job_id: str, status: str):
 @app.command()
 def rescore():
     """Re-score every saved job against your keyword list (after you edit keywords.yaml)."""
-    from . import db
-    from .resume.matching import Matcher
+    from .resume.rescore import rescore_all
     cfg = _cfg()
+    conn = _conn()
     try:
-        m = Matcher.from_config(cfg)
+        r = rescore_all(cfg, conn)
     except ValueError as e:
         raise UserError(str(e))
-    conn = _conn()
-    rows = db.list_jobs(conn, include_hidden=True, include_duplicates=True)
-    for r in rows:
-        m.score_and_save(conn, r)
-    con.print(f"Re-scored {len(rows)} job(s).")
+    con.print(f"Re-scored {r['jobs']} job(s); {r['changed']} changed.")
 
 
 @app.command()
-def build(job_id: str, reveal: bool = typer.Option(False, "--reveal", help="Show the PDF in Finder/file manager.")):
+def build(job_id: str, reveal: bool = typer.Option(False, "--reveal", help="Show the PDF in Finder/file manager."),
+          variant: Optional[str] = typer.Option(None, "--variant",
+                                                help="Which resume to use for this job (saved); 'auto' = pick automatically.")):
     """Build a tailored resume PDF for one job."""
+    from . import db
     from .resume.service import build_for_job
     cfg = _cfg()
     conn = _conn()
+    if variant is not None:
+        j = db.get_job(conn, job_id)
+        if not j:
+            raise UserError(f"No job with id '{job_id}'.")
+        set_variant(cfg, conn, j["id"], variant)
     res = build_for_job(cfg, conn, job_id)
     con.print(f"[green]PDF ready:[/green] {res.pdf}")
+    if res.variant:
+        con.print(f"  resume: {res.variant}")
     con.print(f"  matched {len(res.matched)} keyword(s): {', '.join(res.matched[:12]) or '-'}")
     if res.missing:
         con.print(f"  in the ad but not in your keyword list: {', '.join(res.missing[:10])}")
@@ -272,6 +311,38 @@ def build(job_id: str, reveal: bool = typer.Option(False, "--reveal", help="Show
     if reveal:
         from .platform import reveal as rv
         rv(res.pdf)
+
+
+def set_variant(cfg, conn, job_id: str, variant: str | None) -> dict:
+    from .resume.service import choose_variant
+    try:
+        return choose_variant(cfg, conn, job_id, variant)
+    except ValueError as e:
+        raise UserError(str(e))
+
+
+@app.command()
+def migrate(from_mongo: bool = typer.Option(False, "--from-mongo", help="Import jobs from the older Mongo tracker."),
+            uri: str = typer.Option("mongodb://127.0.0.1:27017", "--uri"),
+            db_name: str = typer.Option("jobdesk", "--db"),
+            dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be imported; change nothing.")):
+    """Import your jobs from another tracker (read-only on the other side; safe to run again)."""
+    from . import migrate_mongo as mm
+    if not from_mongo:
+        raise UserError("Say where to import from, e.g. 'jobapp migrate --from-mongo'.")
+    cfg = _cfg()
+    conn = _conn()
+    try:
+        docs, other = mm.load_docs(uri, db_name)
+    except mm.MongoImportError as e:
+        raise UserError(str(e))
+    rep = mm.import_docs(cfg, conn, docs, dry_run=dry_run)
+    rep.not_imported = {k: v for k, v in other.items() if v}
+    for line in rep.lines():
+        con.print(line)
+    con.print("Contacts and messages are not imported — outreach stays in the old system.")
+    if dry_run:
+        con.print("[yellow]Dry run: nothing was saved.[/yellow]")
 
 
 @app.command()
@@ -385,7 +456,9 @@ def key_status():
 # ── connectors ────────────────────────────────────────────
 @connectors_app.command("sync")
 def connectors_sync(name: str = typer.Argument(..., help="Which connector: obsidian"),
-                    dry_run: bool = typer.Option(False, "--dry-run", help="Only list what would change.")):
+                    dry_run: bool = typer.Option(False, "--dry-run", help="Only list what would change."),
+                    adopt_dashboards: bool = typer.Option(False, "--adopt-dashboards",
+                                                          help="Replace existing files at the dashboard note names.")):
     """Write notes for all the jobs you already have (safe to run again: unchanged notes are left alone)."""
     from . import connectors
     if name != "obsidian":
@@ -402,20 +475,29 @@ def connectors_sync(name: str = typer.Argument(..., help="Which connector: obsid
         n = connectors.pull_all(cfg, conn)
         if n:
             con.print(f"Took {n} status change(s) from your notes.")
+    c.adopt_dashboards = adopt_dashboards
     try:
         res = c.sync(conn, dry_run=dry_run)
         git = c.git_commit() if (c.oc.git_push and not dry_run) else None
     except Exception as e:  # noqa: BLE001
         connectors._record_error("obsidian", "sync", e)
         raise UserError(f"Couldn't write the notes: {e}")
-    connectors._clear_error("obsidian")
     verb = "would be " if dry_run else ""
+    try:
+        c.raise_blocked(res)
+        connectors._clear_error("obsidian")
+    except Exception as e:  # noqa: BLE001
+        if not dry_run:
+            connectors._record_error("obsidian", "dashboards", e)
+        err.print(f"[yellow]![/yellow] {e}")
     for label, key in (("created", "created"), ("updated", "updated"), ("regenerated", "generated")):
         for p in res[key]:
             con.print(f"  {verb}{label}: {p.relative_to(c.vault)}")
     con.print(f"{len(res['created'])} note(s) {verb}created, {len(res['updated'])} {verb}updated, "
               f"{res['unchanged']} unchanged" + (f", {len(res['generated'])} dashboard note(s) {verb}regenerated"
                                                   if res["generated"] else "") + ".")
+    if res.get("shared"):
+        con.print(f"{len(res['shared'])} repost(s) share the note of the same company + title (one_note_per_title).")
     if res["imported"]:
         con.print(f"{len(res['imported'])} status(es) {'would be ' if dry_run else ''}taken over from older notes "
                   "(e.g. 'applied').")

@@ -52,15 +52,20 @@ Add `--json` to `list`/`doctor` when you want to read results programmatically.
   `.obsidian/`), `folder:` (default `Jobs`). Then run `connectors sync obsidian --dry-run`, show them what it
   would write, and run it without `--dry-run`. Options: `two_way` (status edits in notes come back here),
   `git_push` (commit/push the Jobs folder if the vault is a git repo), `min_match`, `only_visible`,
-  `dashboard_note`. Explain: their own text in a note is never changed; `_Dashboard.md` and `_New Today.md`
-  are rewritten every search, so they shouldn't write in those two.
+  `dashboard_note`, `dashboard_file`/`new_today_file` (names of the two generated notes). Explain: their own text
+  in a note is never changed; the two generated notes are rewritten every search, so they shouldn't write in
+  those. If `doctor` says "not overwriting _Dashboard.md", that file is theirs: pick other names (don't use
+  `--adopt-dashboards` unless they say the file can be replaced).
 - After editing run `uv run jobapp config validate` — it explains mistakes and suggests the right spelling.
 
 ## Resume and keywords
 - `resume/resume.tex` is their resume. Only the two Skills lines between `% <<SKILLS-CORE>>…-END>>` and
   `% <<SKILLS-TECH>>…-END>>` are rewritten per job; everything else stays exactly as written.
 - `resume/keywords.yaml` is the list of skills they can **honestly** claim. Only add a keyword after the user
-  confirms they really have that skill. `missing` in `show`/`build` output = words in the ad that are not in the list.
+  confirms they really have that skill. `missing` in `show`/`build` output = skills (from the built-in skills
+  vocabulary + their `extra_vocab:`) that the ad mentions and their list doesn't have. Run `jobapp rescore` after edits.
+- Several resumes: `resume.variants` (+ `default_variant`); per job `jobapp build <id> --variant <name>` (or
+  `auto`). MCP `build_resume(job_id, variant=...)`.
 
 ## Handling `doctor` failures
 | Check | What to do |

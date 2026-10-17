@@ -33,6 +33,7 @@ class Bank:
     core: list[str] = field(default_factory=list)
     tech: list[str] = field(default_factory=list)
     aliases: dict[str, str] = field(default_factory=dict)
+    extra_vocab: object = None  # keywords.yaml `extra_vocab:` — more terms for the "missing" list
 
     @property
     def all(self) -> list[str]:
@@ -43,12 +44,15 @@ class Bank:
         data = data or {}
         if not isinstance(data, dict):
             raise BankError("keywords.yaml must have core_competencies / technical_skills / aliases")
-        unknown = set(data) - {"core_competencies", "technical_skills", "aliases"}
+        unknown = set(data) - {"core_competencies", "technical_skills", "aliases", "extra_vocab"}
         if unknown:
             raise BankError(f"unknown section(s) in keywords.yaml: {', '.join(sorted(unknown))} "
-                            "(allowed: core_competencies, technical_skills, aliases)")
+                            "(allowed: core_competencies, technical_skills, aliases, extra_vocab)")
+        ev = data.get("extra_vocab")
+        if ev is not None and not isinstance(ev, (list, dict)):
+            raise BankError("extra_vocab must be a list of terms or 'Term: [aliases]' lines")
         bank = cls(_flatten(data.get("core_competencies")), _flatten(data.get("technical_skills")),
-                   {str(k): str(v) for k, v in (data.get("aliases") or {}).items()})
+                   {str(k): str(v) for k, v in (data.get("aliases") or {}).items()}, ev)
         if not bank.core and not bank.tech:
             raise BankError("keywords.yaml has no keywords yet")
         bad = [v for v in bank.aliases.values() if v not in bank.core and v not in bank.tech]
