@@ -23,7 +23,7 @@
 | `http.py` | Polite client: browser UA, ≥2 s per host, retry/backoff on 429/5xx, URL guards (robots rules). |
 | `sources/` | One module per site + registry (`sources/__init__.py`). See ADDING_A_SOURCE.md. |
 | `filters.py` | Pure `apply_filters(job, filters) -> (keep, reason)`. |
-| `poll.py` | Orchestration: fetch → filter → upsert → JD for kept jobs → re-filter → score → connectors. |
+| `poll.py` | Orchestration: connectors `pull_all` (two-way) → fetch → filter → upsert → JD for kept jobs → re-filter → score → connectors (`notify_added`, then `after_poll`). |
 | `resume/keywords.py` | Keyword bank loader/validator. |
 | `resume/matching.py` | JD ↔ bank matching, `missing` terms, `match_pct`. |
 | `resume/build.py` | Rewrites only the first `\item` between the SKILLS markers; byte-identical elsewhere. |
@@ -31,7 +31,8 @@
 | `resume/docx_import.py` | Word → LaTeX: extraction, prompt rendering, verification gates, API loop. |
 | `web/` | Dashboard (FastAPI + one HTML page). POSTs need `X-JobApp: 1`; Host must be localhost. |
 | `agent/` | MCP tools (plain functions) + the MCP server wrapper. |
-| `connectors/` | `Connector` protocol; `NullConnector`, `jsonl` reference. Failures logged, never fatal. |
+| `connectors/` | `Connector` protocol; `NullConnector`, `jsonl` reference, `obsidian`. Failures go to `logs/connector_errors.json` (shown by `doctor`), never fatal. Optional hooks: `pull` (+ `two_way`), `after_poll(conn)`, `doctor()`. State (last sync, conflicts) in `logs/connector_state.json`. |
+| `connectors/obsidian.py` | One note per job (`Company — Title.md`, layout of the old hand-made notes + `job_id`, `match`, `matched`, `missing`, `url`, `also_on`). Notes found by frontmatter `job_id`, else file name (older notes without id are adopted, their status taken over once by `sync`). Updates touch only managed keys + the "Applied" box (semantic compare, so Obsidian's YAML style never causes rewrites); atomic writes. `_Dashboard.md`/`_New Today.md` regenerated; optional git commit/push of the folder. Two-way: note status/box → DB via `db.mark` only if the note's mtime is newer than `jobs.status_updated_at`; otherwise DB wins and the conflict is recorded. |
 | `schedule.py`, `platform.py`, `secrets.py` | launchd/cron, Finder reveal, Keychain/.env. |
 | `doctor.py`, `bugreport.py` | Health checks with hints; redacted bug-report zip. |
 
@@ -40,6 +41,9 @@
   `notes`, or a description the user saved by hand (`jd_saved_at`).
 - Jobs the user is tracking (status ≠ `new`) are never hidden by filters.
 - After a full poll every saved job is re-filtered, so changing filters takes effect immediately.
+- `status_updated_at` (migration 003) moves only when the status really changes (`db.set_status`); two-way
+  connectors compare it with a note's modification time. `db.mark` = set status + un-hide a tracked job (CLI,
+  dashboard, MCP and connector pulls all use it).
 - Personal data lives only under `JOBAPP_HOME`; `scripts/privacy_scan.sh` (run by the tests) keeps the repo clean.
 
 ## Matching

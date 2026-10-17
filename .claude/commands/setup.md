@@ -25,7 +25,12 @@ and wait for "ok" before installing anything. Never show raw error output — su
 9. **Write `config.yaml`** in the profile folder from their answers (LinkedIn `searches` with keywords +
    location; FINN `searches` with `q`). For Norwegian titles add `*` forms, e.g. `"*analytiker"`, `"*konsulent"`.
    Run `uv run jobapp config validate` and fix anything it reports.
-10. **Resume**: ask if they have a Word or PDF resume. If yes, run `/import-resume`. If not, explain the example resume
+10. **Obsidian (optional)**: ask "Do you use Obsidian for notes?" If yes, find their vault (ask, or look for a
+    folder containing `.obsidian/`, e.g. under `~/Documents`), then set `connectors.obsidian.enabled: true`,
+    `vault:` and `folder: Jobs` in `config.yaml`, run `uv run jobapp config validate`, then
+    `uv run jobapp connectors sync obsidian --dry-run` and, after they say ok, without `--dry-run`. Ask whether
+    they want status changes made in a note to come back here (`two_way: true`). If no, leave it off.
+11. **Resume**: ask if they have a Word or PDF resume. If yes, run `/import-resume`. If not, explain the example resume
     at `resume/resume.tex` is a placeholder they should replace later.
-11. **Check**: `uv run jobapp doctor`. Fix failures using the table in CLAUDE.md.
-12. **First search**: offer to run `/find-jobs` now, and `uv run jobapp schedule install` for twice-daily searches.
+12. **Check**: `uv run jobapp doctor`. Fix failures using the table in CLAUDE.md.
+13. **First search**: offer to run `/find-jobs` now, and `uv run jobapp schedule install` for twice-daily searches.

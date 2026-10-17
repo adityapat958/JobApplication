@@ -35,6 +35,7 @@ Always run commands from this folder with `uv run jobapp …` (or `jobapp …` i
 | automatic searches | `uv run jobapp schedule install` / `status` / `remove` |
 | bug report for the developer | `uv run jobapp report-bug` |
 | update database after an update | `uv run jobapp migrate` |
+| write Obsidian notes for existing jobs | `uv run jobapp connectors sync obsidian` (`--dry-run` first to preview) |
 
 Add `--json` to `list`/`doctor` when you want to read results programmatically.
 
@@ -45,6 +46,13 @@ Add `--json` to `list`/`doctor` when you want to read results programmatically.
   `job_types` (fulltime, internship, parttime, contract, temporary), `max_age_days`, `companies_include/exclude`,
   `languages` ([en], [no]). Words match whole words; `analyst*` also matches "analysts";
   `*analytiker` matches Norwegian compounds like "Finansanalytiker". Abbreviations like "Sr." count as "senior".
+- `connectors.obsidian` (off by default): one note per job in their Obsidian vault. To turn it on set
+  `enabled: true`, `vault:` (the folder they open in Obsidian — ask them, or look for a folder containing
+  `.obsidian/`), `folder:` (default `Jobs`). Then run `connectors sync obsidian --dry-run`, show them what it
+  would write, and run it without `--dry-run`. Options: `two_way` (status edits in notes come back here),
+  `git_push` (commit/push the Jobs folder if the vault is a git repo), `min_match`, `only_visible`,
+  `dashboard_note`. Explain: their own text in a note is never changed; `_Dashboard.md` and `_New Today.md`
+  are rewritten every search, so they shouldn't write in those two.
 - After editing run `uv run jobapp config validate` — it explains mistakes and suggests the right spelling.
 
 ## Resume and keywords
@@ -67,6 +75,11 @@ Add `--json` to `list`/`doctor` when you want to read results programmatically.
 | BI portal: needs login | expected — not supported yet; set `bi_portal.enabled: false` to hide it |
 | Last search: … warning | usually temporary; run `poll` again later |
 | Connector warnings | jobs are still saved; turn the connector off in `config.yaml` if it keeps failing |
+| Connector: obsidian — vault folder not found | fix `connectors.obsidian.vault` (the folder they open in Obsidian; `~` is fine) |
+| Connector: obsidian vault — no .obsidian folder | the path is probably one level off; point `vault` at the folder that contains `.obsidian` |
+| Connector: obsidian — Permission denied | the vault folder isn't writable (e.g. iCloud still syncing / read-only drive); try again later |
+| Connector: obsidian git / after_poll … git | `git_push` is on: check the vault's git remote/login, or set `git_push: false` |
+| Connector: obsidian conflicts | the note and JobApplication both changed a status; JobApplication's was kept — set it again where they want it |
 
 ## Importing a Word or PDF resume (agent mode — no API key needed)
 1. `uv run jobapp resume import "<path to file.docx or file.pdf>" --prepare` → writes `$JOBAPP_HOME/import/prompt.md`.

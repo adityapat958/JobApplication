@@ -112,7 +112,7 @@ class Connector(Protocol):
     def on_job_updated(self, job, changes: dict): ...
     def pull(self) -> list[dict]: ...
 ```
-Called after DB writes; exceptions are caught, logged, shown in `doctor`, never fail a poll. Ship a `NullConnector` and a `jsonl` connector (appends events to `output/events.jsonl`) as the reference. Obsidian connector is NOT built in v0.1.
+Called after DB writes; exceptions are caught, logged, shown in `doctor`, never fail a poll. Ship a `NullConnector` and a `jsonl` connector (appends events to `output/events.jsonl`) as the reference. Obsidian connector is NOT built in v0.1 (built in v0.1.2: `connectors/obsidian.py`, see ARCHITECTURE.md).
 
 ## 9. CLI
 `jobapp init | config validate | config show | poll [--source X] [--dry-run] | list [--status new --min-match 40] | show <id> | mark <id> <status> | build <id> | serve | resume import ... | schedule install|remove|status | doctor | report-bug | version`
