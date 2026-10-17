@@ -38,5 +38,14 @@ schedule:
   times: ["09:00", "18:00"]
 
 connectors:
-  obsidian: {enabled: false}
+  obsidian:                       # one note per job in your Obsidian vault (off until you turn it on)
+    enabled: false
+    vault: ~/Documents/Obsidian Vault
+    folder: Jobs                  # inside the vault
+    subfolders: {fulltime: Full-Time, internship: Internships, parttime: Part-Time}
+    only_visible: true            # skip jobs your filters hid and duplicates from other sites
+    min_match: 0                  # only jobs with at least this match %
+    dashboard_note: true          # _Dashboard.md + _New Today.md
+    two_way: false                # true = status changes you make in a note come back here
+    git_push: false               # commit (and push) the Jobs folder after each search, if the vault uses git
   jsonl: {enabled: false}

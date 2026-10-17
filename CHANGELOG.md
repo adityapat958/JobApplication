@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.1.2
+**Obsidian notes (optional, off by default)**
+- `connectors.obsidian`: one note per job in your Obsidian vault (`Jobs/Full-Time`, `Jobs/Internships`,
+  `Jobs/Part-Time`) with the familiar layout — details table, Apply link, Status checklist, Notes, Why This
+  Role — plus `job_id`, `match`, `matched`, `missing`, `url`, `also_on` in the frontmatter.
+- Your text is never touched: updates change only the status/match/link fields and the "Applied" tick box;
+  other frontmatter keys and their order stay. Notes are found by `job_id`, so you can rename or move them.
+  Older notes without `job_id` (same file name) are adopted, and a status like "applied" in them is taken over.
+- `_Dashboard.md` (counts by status, top 20 by match) and `_New Today.md` are regenerated after each search.
+- `jobapp connectors sync obsidian` writes notes for the jobs you already have (`--dry-run` to preview;
+  running it again changes nothing).
+- `two_way: true`: a status changed in a note (or ticking "Applied") comes back at the next search, if the note
+  is newer than the last change made here; otherwise this app's status wins and `doctor` shows the conflict.
+- `git_push: true`: the Jobs folder is committed ("jobs: update DATE") and pushed if the vault is a git repo
+  with a remote. Problems are shown by `doctor`; they never stop a search.
+- `doctor` shows the vault, number of notes, last sync and last error. `/setup` asks "Do you use Obsidian?".
+
+**Other**
+- `jobapp mark` now also un-hides a job you start tracking (same as the dashboard and Claude Desktop).
+- Database migration 003: `status_updated_at` (when a job's status last changed).
+
 ## v0.1.1
 **Resume import from PDF**
 - Resume import now accepts a **PDF** as well as a Word file (`jobapp resume import resume.pdf --prepare`):

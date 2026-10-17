@@ -58,6 +58,7 @@ uv run jobapp build <id> --reveal      # tailored PDF, shown in Finder
 uv run jobapp mark <id> applied        # keep track
 uv run jobapp serve                    # dashboard in your browser (http://127.0.0.1:8765)
 uv run jobapp schedule install         # search automatically at the times in config.yaml
+uv run jobapp connectors sync obsidian # optional: one note per job in Obsidian (see below)
 ```
 Your settings are in `~/JobApplication-data/config.yaml`; after editing run `uv run jobapp config validate` —
 it explains mistakes and suggests the right spelling. Filter words match whole words; add `*` for
@@ -73,6 +74,25 @@ With your own API key (`uv run jobapp key set ANTHROPIC_API_KEY`, stored in the 
 loop runs automatically: `uv run jobapp resume import resume.docx --api` (or `resume.pdf`).
 A Word file gives the best result (bold/italic are kept); a PDF works too as long as its text can be selected
 (not a scan).
+
+## Obsidian (optional)
+If you keep notes in [Obsidian](https://obsidian.md), JobApplication can write one note per job into your
+vault — same layout as a hand-made job note: details table, Apply link, a Status checklist and room for your
+own notes. It is **off** until you switch it on in `config.yaml`:
+```yaml
+connectors:
+  obsidian:
+    enabled: true
+    vault: ~/Documents/Obsidian Vault   # the folder you opened as a vault in Obsidian
+    folder: Jobs                        # notes go in Jobs/Full-Time, Jobs/Internships, Jobs/Part-Time
+```
+Then `uv run jobapp connectors sync obsidian` writes notes for the jobs you already have (`--dry-run` shows
+what it would do first). After that every search adds notes for new jobs and keeps `_Dashboard.md` and
+`_New Today.md` up to date. Your own writing in a note is never changed — only the status, match and link
+fields at the top and the "Applied" tick box. You can rename or move notes; they are found by `job_id`.
+Extras: `two_way: true` lets you change a job's status in the note (or tick "Applied") and have it show up
+here at the next search; `git_push: true` commits the Jobs folder (and pushes it) if your vault uses git;
+`min_match: 40` only writes notes for good matches.
 
 ## Claude Desktop
 JobApplication includes an MCP server, so Claude Desktop can use it too. Print your personal config snippet:
