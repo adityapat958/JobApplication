@@ -49,7 +49,7 @@
 <table><thead><tr>
  <th data-k="company">Company</th><th data-k="title">Title</th><th data-k="location">Location</th>
  <th data-k="source">Site</th><th data-k="posted">Posted</th><th data-k="match_pct">Match</th>
- <th>Status</th><th>Actions</th>
+ <th>Status</th><th class="vcol">Resume</th><th>Actions</th>
 </tr></thead><tbody id="b"></tbody></table>
 <div id="none" class="empty" style="display:none">No jobs to show. Try “all”, lower the match slider, or press “Find new jobs”.</div>
 <div id="toast"></div>
@@ -57,7 +57,7 @@
 const H={'X-JobApp':'1','Content-Type':'application/json'};
 const STATUSES=['new','interested','applied','interview','rejected','offer','ignored'];
 const FOLDER='{{FOLDER_LABEL}}';
-let JOBS=[], SORTS=null; const DAY=86400000;
+let JOBS=[], SORTS=null, VARIANTS=[]; const DAY=86400000;
 const PRESETS={newest:[['posted',-1],['match_pct',-1]],match:[['match_pct',-1],['title_score',-1],['posted',-1]],
   newmatch:[['day',-1],['match_pct',-1]],company:[['company',1],['posted',-1]]};
 function posted(j){return j.posted_at||j.first_seen_at||''}
@@ -80,6 +80,8 @@ function toast(html,ms=5000){const t=document.getElementById('toast');t.innerHTM
 async function api(url,opts={}){const r=await fetch(url,{headers:H,...opts});let d={};try{d=await r.json()}catch(e){}
   if(!r.ok&&d.ok===undefined)d.ok=false;return d}
 async function load(){JOBS=await (await fetch('/api/jobs')).json();
+  try{VARIANTS=(await (await fetch('/api/variants')).json()).variants||[]}catch(e){VARIANTS=[]}
+  document.querySelectorAll('.vcol').forEach(e=>e.style.display=VARIANTS.length?'':'none');
   const srcs=[...new Set(JOBS.map(j=>j.source))].sort(),s=document.getElementById('src');
   s.querySelectorAll('option:not([value=""])').forEach(o=>o.remove());
   srcs.forEach(x=>{const o=document.createElement('option');o.value=x;o.textContent=x;s.appendChild(o)});
@@ -114,6 +116,8 @@ function render(){
       <td style="white-space:nowrap" title="${esc(posted(j))}">${ageLabel(j)}</td>
       <td style="white-space:nowrap">${m}</td>
       <td><select class="st" onchange="setStatus('${j.id}',this)">${opts}</select></td>
+      <td class="vcol" style="${VARIANTS.length?'':'display:none'}"><select class="st" title="which resume to use${j.variant_chosen?'':' (picked automatically)'}" onchange="setVariant('${j.id}',this)">
+        <option value="auto">auto (${esc(j.variant_chosen?'…':j.variant)})</option>${VARIANTS.map(v=>`<option value="${esc(v)}" ${j.variant_chosen&&v===j.variant?'selected':''}>${esc(v)}</option>`).join('')}</select></td>
       <td style="white-space:nowrap"><a href="${esc(j.apply_url||j.url)}" target="_blank" rel="noopener">Open ad ↗</a>
         &nbsp;<a href="/job/${j.id}">JD 📝</a>${j.jd_saved_at?' <span style="color:#4a9" title="you saved this JD">✓</span>':''}
         &nbsp;<button onclick="build('${j.id}',this)">Build resume</button></td>`;
@@ -122,12 +126,16 @@ async function setStatus(id,sel){const d=await api('/api/jobs/'+id+'/status',{me
   if(!d.ok){toast('Could not save: '+esc(d.error));return}
   const j=JOBS.find(x=>x.id===id);j.status=d.status;j.done=d.done;if(d.status!=='new')j.hidden=0;
   toast(`${esc(j.company)}: <b>${esc(d.status)}</b>`,2500);render()}
+async function setVariant(id,sel){const d=await api('/api/jobs/'+id+'/variant',{method:'POST',body:JSON.stringify({variant:sel.value})});
+  if(!d.ok){toast('Could not save: '+esc(d.error));return}
+  const j=JOBS.find(x=>x.id===id);Object.assign(j,{variant:d.variant,variant_chosen:d.variant_chosen,match_pct:d.match_pct,matched:d.matched});
+  toast(`${esc(j.company)}: resume <b>${esc(d.variant)}</b>${d.variant_chosen?'':' (auto)'}`,2500);render()}
 async function build(id,btn){btn.disabled=true;toast('Building your resume… (takes a few seconds)',60000);
   try{const d=await api('/api/build/'+id,{method:'POST'});
     if(!d.ok){toast('Build failed: '+esc(d.error),10000);return}
     const a=document.createElement('a');a.href=d.pdf_url;a.download=d.filename;document.body.appendChild(a);a.click();a.remove();
     const warn=(d.warnings||[]).map(w=>'<br>⚠ '+esc(w)).join('');
-    toast(`Downloaded <b>${esc(d.filename)}</b> — ${d.matched.length} keywords matched.${warn}
+    toast(`Downloaded <b>${esc(d.filename)}</b>${d.variant?' ('+esc(d.variant)+' resume)':''} — ${d.matched.length} keywords matched.${warn}
       <button onclick="reveal('${id}')">${FOLDER}</button>`,12000)}
   catch(e){toast('Error: '+esc(e))}finally{btn.disabled=false}}
 async function reveal(id){await api('/api/reveal/'+id,{method:'POST'})}

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from . import paths
 
@@ -84,10 +84,40 @@ class FiltersCfg(_M):
     languages: list[Literal["en", "no"]] = Field(default_factory=list)
 
 
+class VariantCfg(_M):
+    tex: str
+    keywords: str = "resume/keywords.yaml"
+    prefer_if: list[str] = Field(default_factory=list)  # title/JD words that pick this resume ("robot*" ok)
+
+
 class ResumeCfg(_M):
     tex: str = "resume/resume.tex"
     keywords: str = "resume/keywords.yaml"
     output_name: str = "{first}_{last}_{company}_{role}"
+    variants: dict[str, VariantCfg] = Field(default_factory=dict)  # optional: several resumes
+    default_variant: str | None = None
+
+    @field_validator("variants")
+    @classmethod
+    def _names(cls, v: dict) -> dict:
+        for name in v:
+            if not re.fullmatch(r"[A-Za-z0-9][\w-]{0,30}", str(name)):
+                raise ValueError(f"resume variant name '{name}' must be a short word (letters, digits, - or _)")
+        return v
+
+    @model_validator(mode="after")
+    def _default(self):
+        if self.variants:
+            if self.default_variant is None:
+                self.default_variant = next(iter(self.variants))
+            elif self.default_variant not in self.variants:
+                import difflib
+                g = difflib.get_close_matches(self.default_variant, list(self.variants), n=1)
+                raise ValueError(f"default_variant '{self.default_variant}' is not one of your variants "
+                                 f"({', '.join(self.variants)})" + (f" — did you mean '{g[0]}'?" if g else ""))
+        elif self.default_variant is not None:
+            raise ValueError("default_variant is set but there are no resume variants")
+        return self
 
     @field_validator("output_name")
     @classmethod

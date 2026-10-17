@@ -45,6 +45,22 @@ def _post_migrate(conn: sqlite3.Connection, v: int) -> None:
     if v == 2:
         from .dedupe import dedupe_all
         dedupe_all(conn)
+    if v == 4:
+        _rescore_active_profile(conn)
+
+
+def _rescore_active_profile(conn: sqlite3.Connection) -> None:
+    """Migration 004 changed how `missing` is computed: re-score the jobs of this profile's database
+    (skipped for any other database, or when there is no config / keyword list yet)."""
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        if not row or not row[2] or Path(row[2]).resolve() != paths.db_path().resolve():
+            return
+        from .. import config
+        from ..resume.rescore import rescore_all
+        rescore_all(config.load(), conn)
+    except Exception:  # noqa: BLE001  (a missing resume never blocks opening the database)
+        pass
 
 
 def migrate(conn: sqlite3.Connection) -> int:
@@ -101,6 +117,51 @@ def row_to_dict(row: sqlite3.Row | None) -> dict | None:
     return d
 
 
+def url_key(url: str | None) -> str | None:
+    """A listing URL without scheme/www/tracking parameters/trailing slash, for matching imported jobs."""
+    if not url:
+        return None
+    u = url.strip()
+    u = re.sub(r"#.*$", "", u)
+    u = re.sub(r"([?&])(utm_[a-z]+|ref|source|src|trk|refId|trackingId)=[^&]*", r"\1", u, flags=re.I)
+    u = re.sub(r"[?&]+$", "", u.replace("?&", "?"))
+    while "&&" in u:
+        u = u.replace("&&", "&")
+    m = re.match(r"(?i)^(?:https?://)?(?:www\.)?([^/?]+)(.*)$", u)
+    if not m:
+        return None
+    rest = m[2].rstrip("/")
+    return (m[1].lower() + rest) or None
+
+
+def find_existing(conn: sqlite3.Connection, job: JobPosting, *, adopt: bool = True):
+    """The saved row for this posting: by (source, source_id), else an imported (legacy) row of the same
+    source for the same listing — same apply URL, or the only one with this company+title+location. An
+    adopted legacy row takes the posting's source_id, so later polls match it directly."""
+    q = "SELECT id, jd_saved_at, description FROM jobs WHERE source=? AND source_id=?"
+    row = conn.execute(q, (job.source, job.source_id)).fetchone()
+    if row is not None:
+        return row
+    legacy = "SELECT id, jd_saved_at, description, location FROM jobs WHERE source=? AND source_id LIKE 'legacy:%' "
+    cand = None
+    for u in dict.fromkeys(x for x in (url_key(job.apply_url), url_key(job.url)) if x):
+        rows = conn.execute(legacy + "AND legacy_url_key=?", (job.source, u)).fetchall()
+        if len(rows) == 1:
+            cand = rows[0]
+            break
+    if cand is None:
+        key = dd.dedupe_key(job.company, job.title)
+        if key:
+            rows = [r for r in conn.execute(legacy + "AND dedupe_key=?", (job.source, key)).fetchall()
+                    if dd.norm_title(r["location"]) == dd.norm_title(job.location)]
+            cand = rows[0] if len(rows) == 1 else None
+    if cand is None:
+        return None
+    if adopt:
+        conn.execute("UPDATE jobs SET source_id=? WHERE id=?", (job.source_id, cand["id"]))
+    return conn.execute(q, (job.source, job.source_id)).fetchone() if adopt else cand
+
+
 def upsert_job(conn: sqlite3.Connection, job: JobPosting, ts: str | None = None) -> tuple[str, bool]:
     """Insert a posting or refresh its listing fields. Returns (id, is_new)."""
     ts = ts or now()
@@ -109,8 +170,7 @@ def upsert_job(conn: sqlite3.Connection, job: JobPosting, ts: str | None = None)
         "title": job.title, "location": job.location, "job_type": job.job_type,
         "posted_at": _iso(job.posted_at), "raw": json.dumps(job.raw, default=str, ensure_ascii=False),
     }
-    existing = conn.execute("SELECT id, jd_saved_at, description FROM jobs WHERE source=? AND source_id=?",
-                            (job.source, job.source_id)).fetchone()
+    existing = find_existing(conn, job)
     if existing is None:
         conn.execute(
             "INSERT INTO jobs (id, source, source_id, first_seen_at, last_seen_at, status_updated_at, description, "
@@ -261,6 +321,10 @@ def set_description(conn: sqlite3.Connection, job_id: str, text: str | None, *, 
 def set_match(conn: sqlite3.Connection, job_id: str, pct: float, matched: list, missing: list) -> None:
     conn.execute("UPDATE jobs SET match_pct=?, matched=?, missing=? WHERE id=?",
                  (pct, json.dumps(matched, ensure_ascii=False), json.dumps(missing, ensure_ascii=False), job_id))
+
+
+def set_variant(conn: sqlite3.Connection, job_id: str, variant: str | None) -> None:
+    conn.execute("UPDATE jobs SET variant=? WHERE id=?", (variant, job_id))
 
 
 def set_hidden(conn: sqlite3.Connection, job_id: str, hidden: bool, reason: str = "") -> None:

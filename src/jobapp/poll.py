@@ -94,8 +94,7 @@ def run_poll(cfg, conn, *, only: str | None = None, dry_run: bool = False, fetch
                         res.preview.append((job, keep, why))
                         res.kept += keep
                         continue
-                    existing = conn.execute("SELECT id, description, jd_saved_at FROM jobs WHERE source=? AND source_id=?",
-                                            (job.source, job.source_id)).fetchone()
+                    existing = db.find_existing(conn, job)
                     need_jd = keep and fetch_jd and jd_budget > 0 and (
                         existing is None or (not existing["description"] and not existing["jd_saved_at"]))
                     if need_jd:

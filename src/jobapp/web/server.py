@@ -24,7 +24,7 @@ HERE = Path(__file__).parent
 ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 LIST_FIELDS = ("id", "source", "company", "title", "location", "job_type", "posted_at", "first_seen_at",
                "match_pct", "title_score", "matched", "status", "done", "hidden", "hidden_reason", "url", "apply_url",
-               "jd_saved_at", "notes", "also_on")
+               "jd_saved_at", "notes", "also_on", "variant", "variant_chosen")
 
 _refresh = {"running": False, "last": None, "summary": "", "error": None}
 _refresh_lock = threading.Lock()
@@ -79,7 +79,39 @@ def create_app(poll_fn=None) -> FastAPI:
     def jobs(hidden: bool = True):
         c = conn()
         rows = db.list_jobs(c, include_hidden=hidden, order="match", title_include=config_mod.title_include())
+        _with_variants(rows)
         return [{k: r.get(k) for k in LIST_FIELDS} for r in rows]
+
+    def _with_variants(rows):
+        try:
+            cf = config_mod.load()
+        except config_mod.ConfigError:
+            return
+        from ..resume.variants import pick
+        for r in rows:
+            r["variant_chosen"] = bool(r.get("variant") and r["variant"] in cf.resume.variants)
+            r["variant"] = pick(cf, r)
+
+    @app.get("/api/variants")
+    def variants():
+        try:
+            cf = config_mod.load()
+        except config_mod.ConfigError:
+            return {"variants": [], "default": None}
+        return {"variants": list(cf.resume.variants), "default": cf.resume.default_variant}
+
+    @app.post("/api/jobs/{job_id}/variant")
+    def set_variant(job_id: str, payload: dict = Body(...)):
+        from ..resume.service import choose_variant
+        c = conn()
+        job_or_404(c, job_id)
+        try:
+            j = choose_variant(cfg(), c, job_id, payload.get("variant") or None)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        _with_variants([j])
+        return {"ok": True, "variant": j["variant"], "variant_chosen": j["variant_chosen"],
+                "match_pct": j["match_pct"], "matched": j["matched"], "missing": j["missing"]}
 
     @app.get("/api/jobs/{job_id}")
     def job(job_id: str):
@@ -87,6 +119,7 @@ def create_app(poll_fn=None) -> FastAPI:
         j = job_or_404(c, job_id)
         j.pop("raw", None)
         j["last_build"] = db.last_build(c, j["id"])
+        _with_variants([j])
         return j
 
     @app.post("/api/jobs/{job_id}/status")
@@ -133,7 +166,8 @@ def create_app(poll_fn=None) -> FastAPI:
         except BuildError as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=422)
         return {"ok": True, "pdf_url": f"/api/pdf/{job_id}", "filename": res.pdf.name, "path": str(res.pdf),
-                "matched": res.matched, "missing": res.missing[:15], "warnings": res.warnings, "pages": res.pages}
+                "matched": res.matched, "missing": res.missing[:15], "warnings": res.warnings, "pages": res.pages,
+                "variant": res.variant}
 
     def _pdf_path(c, job_id) -> Path:
         b = db.last_build(c, job_or_404(c, job_id)["id"])

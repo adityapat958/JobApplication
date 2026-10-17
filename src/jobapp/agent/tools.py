@@ -86,9 +86,12 @@ def list_jobs(status: str | None = None, min_match: float | None = None, search:
     conn = _conn()
     rows = db.list_jobs(conn, status=status, min_match=min_match, query=search, order=sort, limit=limit,
                         only_hidden=show_hidden, title_include=config_mod.title_include())
+    _with_variants(rows)
     jobs = []
     for r in rows:
         j = {k: r.get(k) for k in LIST_KEYS}
+        if r.get("variant"):
+            j["resume_variant"] = r["variant"] + ("" if r.get("variant_chosen") else " (auto)")
         if r.get("also_on"):
             j["also_on"] = [a["source"] for a in r["also_on"]]
         if show_hidden:
@@ -112,16 +115,40 @@ def job_details(job_id: str) -> dict:
     if j.get("description") and len(j["description"]) > 6000:
         j["description"] = j["description"][:6000] + " …"
     j["last_build"] = db.last_build(conn, j["id"])
+    _with_variants([j])
     return {"ok": True, "job": j}
 
 
+def _with_variants(rows: list[dict]) -> None:
+    try:
+        cfg = _cfg()
+    except Exception:  # noqa: BLE001
+        return
+    if not cfg.resume.variants:
+        return
+    from ..resume.variants import pick
+    for r in rows:
+        r["variant_chosen"] = bool(r.get("variant") and r["variant"] in cfg.resume.variants)
+        r["variant"] = pick(cfg, r)
+
+
 @_safe
-def build_resume(job_id: str) -> dict:
-    """Build the tailored PDF resume for a job."""
-    from ..resume.service import build_for_job
-    res = build_for_job(_cfg(), _conn(), job_id)
-    return {"ok": True, "pdf": str(res.pdf), "pages": res.pages, "matched_keywords": res.matched,
-            "in_ad_not_in_your_keywords": res.missing[:15], "warnings": res.warnings}
+def build_resume(job_id: str, variant: str | None = None) -> dict:
+    """Build the tailored PDF resume for a job. variant: which resume to use if the user has several
+    (saved for this job; 'auto' = pick automatically; leave empty to keep the current choice)."""
+    from ..resume.service import build_for_job, choose_variant
+    cfg, conn = _cfg(), _conn()
+    if variant:
+        try:
+            choose_variant(cfg, conn, job_id, variant)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+    res = build_for_job(cfg, conn, job_id)
+    out = {"ok": True, "pdf": str(res.pdf), "pages": res.pages, "matched_keywords": res.matched,
+           "in_ad_not_in_your_keywords": res.missing[:15], "warnings": res.warnings}
+    if res.variant:
+        out["resume_variant"] = res.variant
+    return out
 
 
 @_safe
