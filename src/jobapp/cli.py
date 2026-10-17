@@ -483,6 +483,8 @@ def connectors_sync(name: str = typer.Argument(..., help="Which connector: obsid
     con.print(f"{len(res['created'])} note(s) {verb}created, {len(res['updated'])} {verb}updated, "
               f"{res['unchanged']} unchanged" + (f", {len(res['generated'])} dashboard note(s) {verb}regenerated"
                                                   if res["generated"] else "") + ".")
+    if res.get("shared"):
+        con.print(f"{len(res['shared'])} repost(s) share the note of the same company + title (one_note_per_title).")
     if res["imported"]:
         con.print(f"{len(res['imported'])} status(es) {'would be ' if dry_run else ''}taken over from older notes "
                   "(e.g. 'applied').")

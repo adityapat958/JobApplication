@@ -28,6 +28,8 @@
   made by JobApplication (or the old exporter) is never overwritten — `doctor` reports it;
   `connectors sync obsidian --adopt-dashboards` replaces it on purpose.
 - An imported job gets exactly its old note, and never a second one.
+- `one_note_per_title: true`: a repost (same company + title, new listing id) shares the existing note instead
+  of getting a "Company — Title (abc123)" copy (like the old exporter).
 
 **Other**
 - Database migration 004: `variant`, `legacy_id`, `note_path`, `legacy_url_key`.

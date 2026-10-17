@@ -673,3 +673,22 @@ def test_dashboard_name_validation():
             config.parse({"connectors": {"obsidian": {"dashboard_file": bad}}})
     with pytest.raises(config.ConfigError, match="different"):
         config.parse({"connectors": {"obsidian": {"dashboard_file": "a.md", "new_today_file": "A.md"}}})
+
+
+def test_one_note_per_title(profile, tmp_path):
+    cfg, vault = make_cfg(tmp_path, one_note_per_title=True)
+    conn = db.connect()
+    a = add(conn, "801", company="Nordlys AS", title="Data Analyst")
+    b = add(conn, "802", company="Nordlys AS", title="Data Analyst")           # repost, other id
+    d = add(conn, "803", company="Nordlys", title="Data Analyst (m/f/d)")      # same job after normalising
+    e = add(conn, "804", company="Nordlys AS", title="Data Analyst, Credit")   # a different job
+    c = conn_for(cfg)
+    res = c.sync(conn, dry_run=True)
+    assert len(res["created"]) == 3 and len(res["shared"]) == 1  # 803's name differs: own note
+    res = c.sync(conn)
+    names = sorted(p.name for p in (vault / "Jobs" / "Full-Time").iterdir())
+    assert names == ["Nordlys AS — Data Analyst, Credit.md", "Nordlys AS — Data Analyst.md",
+                     "Nordlys — Data Analyst (mfd).md"]
+    assert [j for j, _ in res["shared"]] == [b["id"]] or [j for j, _ in res["shared"]] == [a["id"]]
+    assert c.sync(conn)["created"] == []
+    assert e and d

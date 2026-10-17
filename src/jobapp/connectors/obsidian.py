@@ -275,6 +275,11 @@ def note_state(text: str) -> dict:
             "applied": applied_box(body)}
 
 
+def _title_key(company, title) -> str | None:
+    from ..db.dedupe import dedupe_key
+    return dedupe_key(str(company or ""), str(title or ""))
+
+
 def is_replaceable(text: str) -> bool:
     """A dashboard file we may overwrite: ours (generated header) or one written by the older exporter."""
     return text.lstrip("\ufeff").startswith(GEN_MARK) or any(r.match(text) for r in OLD_EXPORTER)
@@ -305,6 +310,8 @@ class ObsidianConnector:
         self.generated = (self.oc.dashboard_file, self.oc.new_today_file)
         self.adopt_dashboards = False  # `sync --adopt-dashboards`: replace existing files at those names
         self.blocked: list[Path] = []  # existing files not written because they aren't ours
+        self.shared: list[tuple[str, Path]] = []  # (job id, note) reposts that share an existing note
+        self._created_keys: dict[Path, str | None] = {}
 
     # index ------------------------------------------------
     def _check_vault(self) -> None:
@@ -394,6 +401,23 @@ class ObsidianConnector:
         jid = note_job_id(text)
         return p if jid in (None, job["id"]) else None
 
+    def _title_note(self, job: dict) -> Path | None:
+        """An existing note (any folder) named like this job whose frontmatter has the same company + title."""
+        want = _title_key(job.get("company"), job.get("title"))
+        if not want:
+            return None
+        for c in self._by_name.get(_key(self._stem(job)), []):
+            if c in self._created_keys:
+                key = self._created_keys[c]
+            elif c.exists():
+                fm = parse_fm(split_note(c.read_text(encoding="utf-8", errors="replace"))[0])
+                key = _title_key(fm.get("company"), fm.get("title"))
+            else:
+                continue
+            if key == want:
+                return c
+        return None
+
     @staticmethod
     def _stem(job: dict) -> str:
         return safe_name(f"{job.get('company') or ''} — {job.get('title') or ''}")
@@ -433,8 +457,14 @@ class ObsidianConnector:
         if p is None:
             if not create or job.get("note_path"):
                 return None  # an imported job never gets a second note (its old one is gone or shared)
+            if self.oc.one_note_per_title:
+                twin = self._title_note(job)
+                if twin is not None:
+                    self.shared.append((job["id"], twin))
+                    return None  # a repost of a job that already has a note: no "(id)" copy
             p = self._new_path(job)
             self._write(p, render_note(job, self.clock()), "created")
+            self._created_keys[p] = _title_key(job.get("company"), job.get("title"))
             self._by_id[job["id"]] = p
             self._by_name.setdefault(_key(p.stem), []).append(p)
             self._claimed.add(p)
@@ -514,7 +544,7 @@ class ObsidianConnector:
         from . import load_state, save_state
         self._check_vault()
         self.dry_run, self.changes, self.imported, self._importing = dry_run, [], [], True
-        self.blocked = []
+        self.blocked, self.shared = [], []
         state = load_state(NAME)
         since = state.get("since")
         if not since and not dry_run:
@@ -528,7 +558,7 @@ class ObsidianConnector:
         unchanged = 0
         try:
             for j in order:
-                has = j["id"] in self._by_id or (j.get("note_path") and self._legacy_note(j) is not None)
+                has = j["id"] in self._by_id or bool(j.get("note_path") and self._legacy_note(j) is not None)
                 want = self.eligible(j) and (create_all or (since and (j.get("first_seen_at") or "") >= since))
                 if not has and not want:
                     continue
@@ -546,7 +576,8 @@ class ObsidianConnector:
         res = {"created": [p for a, p in self.changes if a == "created"],
                "updated": [p for a, p in self.changes if a == "updated"],
                "generated": [p for a, p in self.changes if a == "generated"], "unchanged": unchanged,
-               "imported": list(self.imported), "blocked": list(self.blocked)}
+               "imported": list(self.imported), "blocked": list(self.blocked),
+               "shared": list(self.shared)}
         if not dry_run:
             state.update(last_sync=now(), notes=len(self._by_id))
             save_state(NAME, state)

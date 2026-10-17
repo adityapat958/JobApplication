@@ -93,7 +93,8 @@ what it would do first). After that every search adds notes for new jobs and kee
 fields at the top and the "Applied" tick box. You can rename or move notes; they are found by `job_id`.
 Extras: `two_way: true` lets you change a job's status in the note (or tick "Applied") and have it show up
 here at the next search; `git_push: true` commits the Jobs folder (and pushes it) if your vault uses git;
-`min_match: 40` only writes notes for good matches. The two generated notes can have other names
+`min_match: 40` only writes notes for good matches; `one_note_per_title: true` keeps one note per company + title
+(reposts share it). The two generated notes can have other names
 (`dashboard_file: "_JobApplication Dashboard.md"`, `new_today_file: ...`); an existing file at that name that
 JobApplication didn't make is never overwritten (`doctor` says so; `connectors sync obsidian --adopt-dashboards`
 replaces it on purpose).

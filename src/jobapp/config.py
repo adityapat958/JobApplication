@@ -173,6 +173,7 @@ class ObsidianCfg(_M):
     only_visible: bool = True
     min_match: float = Field(0, ge=0, le=100)
     dashboard_note: bool = True
+    one_note_per_title: bool = False           # a repost (same company + title) shares the existing note
     dashboard_file: str = "_Dashboard.md"      # generated notes, inside `folder`
     new_today_file: str = "_New Today.md"
     two_way: bool = False
