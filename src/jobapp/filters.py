@@ -24,6 +24,7 @@ ABBREV = [
 ]
 
 
+@lru_cache(maxsize=16384)
 def normalize(s: str | None) -> str:
     t = re.sub(r"[\u00ad\u200b\u200c\u200d\ufeff]", "", fold(s or ""))
     for pat, rep in ABBREV:

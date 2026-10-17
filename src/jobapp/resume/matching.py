@@ -6,31 +6,8 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 
-from ..text import fold, strip_contact
+from ..text import fold, strip_boilerplate, strip_contact
 from .keywords import Bank
-
-STOP = {
-    "The", "And", "For", "With", "Our", "You", "Your", "We", "This", "That", "Will", "Are", "Have", "Has",
-    "Their", "Its", "From", "Into", "About", "Team", "Role", "Work", "Years", "Experience", "Job",
-    "Description", "Requirements", "Responsibilities", "Qualifications", "Preferred", "Plus", "Company",
-    "Engineer", "Engineering", "Software", "Machine", "Learning", "Computer", "Science", "Data", "Systems",
-    "System", "Skills", "Strong", "Ability", "Knowledge", "Understanding", "Development", "Design",
-    "What", "Who", "How", "Why", "When", "Where", "Benefits", "Apply", "Equal", "Opportunity", "Employer",
-    "About Us", "As", "In", "If", "At", "To", "Of", "On", "Is", "Be", "An", "A", "All", "Or", "Not", "By",
-    "Vi", "Du", "Det", "Som", "Og", "Er", "En", "Et", "Hos", "Med", "Til", "Har", "Kan", "Skal", "Om",
-    "Stillingen", "Arbeidsoppgaver", "Kvalifikasjoner", "Vi Tilbyr", "Personlige", "Egenskaper",
-    "Senior", "Junior", "Lead", "Manager", "Analyst", "Intern", "Internship", "New", "Grad", "Full", "Time",
-    "Remote", "Hybrid", "Location", "Salary", "Pay", "Range", "Inc", "Ltd", "LLC", "AS", "ASA", "USA", "US",
-    "PhD", "MS", "BS", "M.S", "B.S", "Bachelor", "Master", "Degree", "Minimum", "Basic", "Nice", "Must",
-    "Bonus", "Good", "Fit", "Series", "Inc.", "Corp", "Corporation", "Group", "EOE", "EEO", "FAQ", "CEO",
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "January", "February", "March", "April", "May",
-    "June", "July", "August", "September", "October", "November", "December", "Summer", "Fall", "Spring",
-}
-GEO = {"united states", "united kingdom", "north america", "europe", "norway", "norge", "oslo", "bergen",
-       "san francisco", "new york", "bay area", "los angeles", "seattle", "boston", "remote"} | {
-    s.lower() for s in "AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ "
-    "NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC NYC SF".split()}
-
 
 def _norm(s: str) -> str:
     t = fold(s)
@@ -87,52 +64,96 @@ def find_matched(text: str, bank: Bank) -> tuple[list[str], list[str]]:
     return core, tech
 
 
-def find_missing(text: str, bank: Bank, ignore: tuple[str, ...] = ()) -> list[str]:
-    """Title-Case / ACRONYM / CamelCase terms in the JD that aren't in the bank (likely skills to consider)."""
+def _tokens(text_norm: str) -> set[str]:
+    out: set[str] = set()
+    for t in re.findall(r"[\w+#.&]+", text_norm):
+        t = t.strip(".")
+        if t:
+            out.add(t)
+            if t.endswith("s"):
+                out.add(t[:-1])
+    return out
+
+
+def _known(bank: Bank) -> tuple[set[str], list[str]]:
     known = {_norm(k) for k in bank.all} | {_norm(a) for a in bank.aliases}
     for k in bank.all:
         known |= {_norm(v) for v in _variants(k)}
-    known_words = {w for k in known for w in k.split()}
-    ign = {_norm(i) for i in ignore if i} | {w for i in ignore if i for w in _norm(i).split()} | GEO
-    cand: set[str] = set()
-    for words in _cap_runs(text):
-        words = [w for w in words if _norm(w) not in ign]
-        while words and words[-1] in STOP:
-            words.pop()
-        while words and words[0] in STOP:
-            words.pop(0)
-        if not words or len(words) > 3:
-            continue
-        term = " ".join(words)
-        low = _norm(term)
-        if low in known or low in ign or all(w in known_words for w in low.split()):
-            continue
-        camel = len(words) == 1 and re.search(r"[a-z][A-Z]", words[0])
-        acronym = len(words) == 1 and words[0].isupper() and 2 <= len(words[0]) <= 6
-        if (len(words) >= 2 and not any(w in STOP for w in words)) or camel or acronym:
-            cand.add(term)
-    return sorted(cand, key=str.lower)
+    return known, sorted(known, key=len, reverse=True)
 
 
-def _cap_runs(text: str):
-    """Runs of consecutive Capitalised/ACRONYM tokens, broken by punctuation or lowercase words."""
-    for line in text.splitlines():
-        run: list[str] = []
-        for m in re.finditer(r"[\w+#][\w+#.\-]*|[^\w\s]", line):
-            tok = m.group(0)
-            end_break = tok.endswith(".") and len(tok) > 1
-            tok = tok.rstrip(".")
-            if tok and (tok[0].isupper() or tok[0].isdigit() and run) and re.match(r"[\w+#]", tok):
-                run.append(tok)
-                if end_break:
-                    yield run
-                    run = []
-            else:
-                if run:
-                    yield run
-                run = []
-        if run:
-            yield run
+def _phrase_in(phrase: str, haystacks: list[str]) -> bool:
+    pat = re.compile(r"(?<![\w+#])" + re.escape(phrase) + r"(?![\w+#])")
+    return any(pat.search(h) for h in haystacks)
+
+
+def _form_in(form, first: str, text_norm: str, text_raw: str, toks: set[str]) -> bool:
+    from .vocab import cs_pattern
+    if form.case_sensitive:
+        return bool(cs_pattern(form.text).search(re.sub(r"[\-–—_/]+", " ", text_raw)))
+    if first and first not in toks and first.rstrip("s") not in toks and re.fullmatch(r"\w+", first):
+        return False  # fast path: the first word isn't in the text at all
+    return contains(text_norm, text_raw, form.text)
+
+
+_COVER_CACHE: dict[tuple[int, int], tuple] = {}
+
+
+def _candidates(bank: Bank, vocab) -> list[tuple]:
+    """Vocabulary terms the bank doesn't already cover, with their normalised forms (cached per bank+vocab)."""
+    key = (id(bank), id(vocab))
+    hit = _COVER_CACHE.get(key)
+    if hit and hit[0] is bank and hit[1] is vocab:
+        return hit[2]
+    known, known_list = _known(bank)
+    out = []
+    for term in vocab.terms:
+        norms = [_norm(f.text) for f in term.forms]
+        if any(n in known for n in norms):
+            continue
+        if any(not f.case_sensitive and _phrase_in(n, known_list) for f, n in zip(term.forms, norms)):
+            continue  # "Object Detection" is covered by "Object Detection and Tracking"
+        out.append((term, norms, [(n.split() or [""])[0] for n in norms]))
+    if len(_COVER_CACHE) > 64:
+        _COVER_CACHE.clear()
+    _COVER_CACHE[key] = (bank, vocab, out)
+    return out
+
+
+def find_missing(text: str, bank: Bank, ignore: tuple[str, ...] = (), vocab=None) -> list[str]:
+    """Skills-vocabulary terms the JD mentions that the keyword bank doesn't cover."""
+    from .vocab import Vocab
+    vocab = vocab or Vocab.load(extra=bank.extra_vocab)
+    ign = {_norm(i) for i in ignore if i}
+    tn = _norm(text)
+    toks = _tokens(tn)
+    out: list[str] = []
+    for term, norms, firsts in _candidates(bank, vocab):
+        if any(n in ign for n in norms):
+            continue
+        if any(_form_in(f, w, tn, text, toks) for f, w in zip(term.forms, firsts)):
+            out.append(term.name)
+    return sorted(dict.fromkeys(out), key=str.lower)
+
+
+def vocab_aliases(bank: Bank, vocab) -> dict[str, str]:
+    """Vocabulary aliases of terms you have (e.g. 'maskinlæring' → your 'Machine Learning')."""
+    by_norm: dict[str, str] = {}
+    for k in bank.all:
+        for v in _variants(k):
+            by_norm.setdefault(_norm(v), k)
+    for a, c in bank.aliases.items():
+        by_norm.setdefault(_norm(a), c)
+    out: dict[str, str] = {}
+    for term in vocab.terms:
+        canon = next((by_norm[_norm(f.text)] for f in term.forms if _norm(f.text) in by_norm), None)
+        if not canon:
+            continue
+        for f in term.forms:
+            n = _norm(f.text)
+            if not f.case_sensitive and n not in by_norm and f.text not in bank.aliases:
+                out[f.text] = canon
+    return out
 
 
 MIN_DENOM = 6
@@ -144,19 +165,29 @@ class MatchResult:
     core: list[str]
     tech: list[str]
     missing: list[str]
+    variant: str | None = None
 
     @property
     def matched(self) -> list[str]:
         return self.core + self.tech
 
 
-def score(text: str | None, bank: Bank, ignore: tuple[str, ...] = (), title: str = "") -> MatchResult:
+def clean_jd(text: str) -> str:
+    """The JD without contact blocks, people's names, boilerplate, URLs, e-mails and phone numbers."""
+    text, _people = strip_contact(text)
+    return strip_boilerplate(text)
+
+
+def score(text: str | None, bank: Bank, ignore: tuple[str, ...] = (), title: str = "", vocab=None) -> MatchResult:
+    from .vocab import Vocab
+    vocab = vocab or Vocab.load(extra=bank.extra_vocab)
+    bank = _with_vocab_aliases(bank, vocab)
     if not text:
         core, tech = find_matched(title, bank) if title else ([], [])
         return MatchResult(None, core, tech, [])
-    text, people = strip_contact(text)
+    text = clean_jd(text)
     core, tech = find_matched(text + "\n" + title, bank)
-    missing = find_missing(text, bank, ignore + tuple(people))
+    missing = find_missing(text, bank, ignore, vocab)
     n = len(core) + len(tech)
     # A JD naming only one or two skills tells us little, so the denominator has a floor.
     denom = max(n + len(missing), MIN_DENOM)
@@ -164,17 +195,72 @@ def score(text: str | None, bank: Bank, ignore: tuple[str, ...] = (), title: str
     return MatchResult(pct, core, tech, missing)
 
 
+_VA_CACHE: dict[tuple[int, int], tuple] = {}
+
+
+def _with_vocab_aliases(bank: Bank, vocab) -> Bank:
+    key = (id(bank), id(vocab))
+    hit = _VA_CACHE.get(key)
+    if hit and hit[0] is bank and hit[1] is vocab:
+        return hit[2]
+    extra = vocab_aliases(bank, vocab)
+    b = Bank(bank.core, bank.tech, {**extra, **bank.aliases}, bank.extra_vocab) if extra else bank
+    if len(_VA_CACHE) > 64:
+        _VA_CACHE.clear()
+    _VA_CACHE[key] = (bank, vocab, b)
+    return b
+
+
 class Matcher:
-    def __init__(self, bank: Bank):
-        self.bank = bank
+    """Scores jobs against one keyword bank, or — with resume.variants — against the bank of the variant
+    each job uses (resume.variants.pick)."""
+
+    def __init__(self, bank: Bank | None = None, vocab=None, *, cfg=None, banks: dict | None = None):
+        from .vocab import Vocab
+        self.cfg = cfg
+        self.banks = banks or {}
+        self.bank = bank if bank is not None else next(iter(self.banks.values()), None)
+        self.vocab = vocab or Vocab.load(extra=self.bank.extra_vocab if self.bank else None)
+        self._vocabs: dict[int, object] = {}
 
     @classmethod
     def from_config(cls, cfg) -> "Matcher":
-        return cls(Bank.load(cfg.resolve(cfg.resume.keywords)))
+        if not cfg.resume.variants:
+            return cls(Bank.load(cfg.resolve(cfg.resume.keywords)))
+        from .variants import resume_for
+        loaded: dict = {}
+        banks = {}
+        for name in cfg.resume.variants:
+            p = resume_for(cfg, name).keywords
+            if p not in loaded:
+                loaded[p] = Bank.load(p)
+            banks[name] = loaded[p]
+        return cls(cfg=cfg, banks=banks)
+
+    def variant_for(self, job: dict) -> str | None:
+        if not self.banks:
+            return None
+        from .variants import pick
+        return pick(self.cfg, job)
+
+    def bank_for(self, job: dict) -> tuple[str | None, Bank]:
+        v = self.variant_for(job)
+        return v, (self.banks[v] if v else self.bank)
+
+    def _vocab(self, v: str | None, bank: Bank):
+        if v is None:
+            return self.vocab
+        if id(bank) not in self._vocabs:  # one vocabulary per keyword bank (variants may share a bank)
+            from .vocab import Vocab
+            self._vocabs[id(bank)] = Vocab.load(extra=bank.extra_vocab)
+        return self._vocabs[id(bank)]
 
     def score_job(self, job: dict) -> MatchResult:
+        v, bank = self.bank_for(job)
         ignore = (job.get("company") or "", job.get("location") or "")
-        return score(job.get("description"), self.bank, ignore, job.get("title") or "")
+        r = score(job.get("description"), bank, ignore, job.get("title") or "", self._vocab(v, bank))
+        r.variant = v
+        return r
 
     def score_and_save(self, conn, job: dict) -> MatchResult:
         from .. import db
