@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.6
+- Resumes: a section or entry heading (job, project, education) never sits alone at the bottom of a page any
+  more; it moves to the next page together with its first lines. Applied to the build copy only — your resume
+  file is not changed — and works for any resume using the template's entry commands.
+- Dashboard: ✓ "done" tick per job (marks it applied; click again to undo) and a "done ✓" view, next to the
+  status dropdown.
+- Dashboard: an empty list now says why (filters vs. no jobs vs. could not load) with a "Reset filters" button.
+
 ## v0.1.5
 - New: tailored cover letter per job (`jobapp letter <id> --prepare/--verify/--accept/--api`, `/cover-letter`,
   dashboard "Cover letter ✉", MCP `cover_letter_prepare`/`cover_letter_submit`). Claude writes the body; code

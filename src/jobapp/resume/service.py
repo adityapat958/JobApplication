@@ -132,7 +132,7 @@ def build_pdf(cfg, *, company: str, role: str, description: str | None, title: s
     with tempfile.TemporaryDirectory() as td:
         work = Path(td)
         tmp_tex = work / f"{name}.tex"
-        tmp_tex.write_text(t.tex, encoding="utf-8")
+        tmp_tex.write_text(texmod.keep_headings(t.tex), encoding="utf-8")
         _copy_assets(tex_path.parent, work)
         try:
             pdf = texmod.compile_pdf(tmp_tex, work, engine)

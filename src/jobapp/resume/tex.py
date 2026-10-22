@@ -81,3 +81,30 @@ def compile_pdf(tex: Path, outdir: Path | None = None, engine: Engine | None = N
 def page_count(pdf: Path) -> int:
     from pypdf import PdfReader
     return len(PdfReader(str(pdf)).pages)
+
+
+_KEEP = r"""
+% --- added by JobApplication at build time: keep headings with their content at page breaks ---
+\usepackage{needspace}
+\usepackage{etoolbox}
+\AtBeginDocument{%
+  \ifdefined\expentry\pretocmd{\expentry}{\Needspace{6\baselineskip}}{}{}\fi
+  \ifdefined\projentry\pretocmd{\projentry}{\Needspace{4\baselineskip}}{}{}\fi
+  \ifdefined\projnolink\pretocmd{\projnolink}{\Needspace{4\baselineskip}}{}{}\fi
+  \ifdefined\eduentry\pretocmd{\eduentry}{\Needspace{4\baselineskip}}{}{}\fi
+  \ifdefined\resumeSubheading\pretocmd{\resumeSubheading}{\Needspace{5\baselineskip}}{}{}\fi
+  \ifdefined\resumeProjectHeading\pretocmd{\resumeProjectHeading}{\Needspace{4\baselineskip}}{}{}\fi
+  \pretocmd{\section}{\Needspace{5\baselineskip}}{}{}%
+}
+% --- end ---
+"""
+
+
+def keep_headings(tex: str) -> str:
+    """Return `tex` with a preamble patch so an entry/section heading never sits alone at the bottom of a
+    page (it moves to the next page with its first lines). Applied to the temporary build copy only; the
+    user's resume file is never changed. No-op if the document has no \\begin{document}."""
+    if "added by JobApplication at build time" in tex:
+        return tex
+    i = tex.find("\\begin{document}")
+    return tex if i < 0 else tex[:i] + _KEEP + tex[i:]

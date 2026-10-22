@@ -21,6 +21,9 @@
  .why{color:#c85;font-size:12px}
  tr.hid td{opacity:.6}
  tr.done td.t{text-decoration:line-through;opacity:.6}
+ .chk{width:26px;height:26px;padding:0;border-radius:50%;background:#1a1f28;color:#556;border:1px solid #334;cursor:pointer;font-weight:bold}
+ .chk:hover{border-color:#4a9;color:#4a9}
+ .chk.on{background:#2d6b4a;color:#eafff3;border-color:#4a9}
  label{color:var(--dim);font-size:12px}
  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#243;color:#cfe;padding:10px 16px;border:1px solid #47a;border-radius:8px;opacity:0;transition:.2s;pointer-events:none;max-width:80vw;z-index:9}
  #toast.on{opacity:1;pointer-events:auto}
@@ -33,7 +36,7 @@
  <input id="q" placeholder="search company / title / place" size="26">
  <label>show <select id="show">
    <option value="todo">to do</option><option value="tracking">interested + applied…</option>
-   <option value="all">all</option><option value="hidden">hidden by my filters</option></select></label>
+   <option value="done">done ✓</option><option value="all">all</option><option value="hidden">hidden by my filters</option></select></label>
  <label>site <select id="src"><option value="">all sites</option></select></label>
  <label>type <select id="type"><option value="">any</option><option value="fulltime">full-time</option>
    <option value="internship">internship</option><option value="parttime">part-time</option></select></label>
@@ -47,7 +50,7 @@
  <button id="refresh" onclick="refresh()">↻ Find new jobs</button>
 </header>
 <table><thead><tr>
- <th data-k="company">Company</th><th data-k="title">Title</th><th data-k="location">Location</th>
+ <th data-k="done" title="mark done">✓</th><th data-k="company">Company</th><th data-k="title">Title</th><th data-k="location">Location</th>
  <th data-k="source">Site</th><th data-k="posted">Posted</th><th data-k="match_pct">Match</th>
  <th>Status</th><th class="vcol">Resume</th><th>Actions</th>
 </tr></thead><tbody id="b"></tbody></table>
@@ -100,7 +103,8 @@ function render(){
     if(show==='hidden'){if(!j.hidden)return false}
     else{if(j.hidden)return false;
       if(show==='todo'&&!['new','interested'].includes(j.status))return false;
-      if(show==='tracking'&&j.status==='new')return false}
+      if(show==='tracking'&&j.status==='new')return false
+      if(show==='done'&&!j.done)return false}
     const hay=(j.company+' '+j.title+' '+j.location).toLowerCase();
     return hay.includes(q)&&(!src||j.source===src)&&(!ty||j.job_type===ty)&&(!age||ageDays(j)<=age)
       &&(mm===0||(j.match_pct||0)>=mm)});
@@ -118,7 +122,8 @@ function render(){
     const opts=STATUSES.map(s=>`<option ${s===j.status?'selected':''}>${s}</option>`).join('');
     const tr=document.createElement('tr');tr.dataset.id=j.id;
     if(j.hidden)tr.className='hid';else if(j.done)tr.className='done';
-    tr.innerHTML=`<td class="t">${esc(j.company)}</td>
+    tr.innerHTML=`<td><button class="chk${j.done?' on':''}" title="${j.done?'done — click to undo':'mark done (applied)'}" onclick="toggleDone('${j.id}')">✓</button></td>
+      <td class="t">${esc(j.company)}</td>
       <td class="t">${esc(j.title)}${j.hidden?`<div class="why">hidden: ${esc(j.hidden_reason)}</div>`:''}<div class="kw">${esc(kw)}</div></td>
       <td>${esc(j.location)}</td><td class="kw">${esc(j.source)}${(j.also_on||[]).length?`<br><span title="same job on another site">also on: ${(j.also_on||[]).map(a=>`<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.source)}</a>`).join(', ')}</span>`:''}</td>
       <td style="white-space:nowrap" title="${esc(posted(j))}">${ageLabel(j)}</td>
@@ -130,6 +135,12 @@ function render(){
         &nbsp;<a href="/job/${j.id}">JD 📝</a>${j.jd_saved_at?' <span style="color:#4a9" title="you saved this JD">✓</span>':''}
         &nbsp;<button onclick="build('${j.id}',this)">Build resume</button></td>`;
     b.appendChild(tr)}}
+async function toggleDone(id){const j=JOBS.find(x=>x.id===id);
+  const st=j.done?'interested':(['new','interested'].includes(j.status)?'applied':j.status);
+  const d=await api('/api/jobs/'+id+'/status',{method:'POST',body:JSON.stringify({status:j.done&&st===j.status?'interested':st})});
+  if(!d.ok){toast('Could not save: '+esc(d.error));return}
+  j.status=d.status;j.done=d.done;if(d.status!=='new')j.hidden=0;
+  toast(d.done?`✓ done — ${esc(j.company)}`:`unmarked ${esc(j.company)}`,2500);render()}
 async function setStatus(id,sel){const d=await api('/api/jobs/'+id+'/status',{method:'POST',body:JSON.stringify({status:sel.value})});
   if(!d.ok){toast('Could not save: '+esc(d.error));return}
   const j=JOBS.find(x=>x.id===id);j.status=d.status;j.done=d.done;if(d.status!=='new')j.hidden=0;
