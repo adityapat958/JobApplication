@@ -51,7 +51,7 @@
  <th data-k="source">Site</th><th data-k="posted">Posted</th><th data-k="match_pct">Match</th>
  <th>Status</th><th class="vcol">Resume</th><th>Actions</th>
 </tr></thead><tbody id="b"></tbody></table>
-<div id="none" class="empty" style="display:none">No jobs to show. Try “all”, lower the match slider, or press “Find new jobs”.</div>
+<div id="none" class="empty" style="display:none"><span id="nonemsg">No jobs to show.</span> <button onclick="resetUI()">Reset filters</button></div>
 <div id="toast"></div>
 <script>
 const H={'X-JobApp':'1','Content-Type':'application/json'};
@@ -79,7 +79,12 @@ function toast(html,ms=5000){const t=document.getElementById('toast');t.innerHTM
   clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),ms)}
 async function api(url,opts={}){const r=await fetch(url,{headers:H,...opts});let d={};try{d=await r.json()}catch(e){}
   if(!r.ok&&d.ok===undefined)d.ok=false;return d}
-async function load(){JOBS=await (await fetch('/api/jobs')).json();
+function resetUI(){localStorage.removeItem('jobapp-ui');document.getElementById('q').value='';
+  document.getElementById('show').value='todo';['src','type'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('age').value='0';document.getElementById('sort').value='match';document.getElementById('mm').value='0';render()}
+async function load(){try{const r=await fetch('/api/jobs');if(!r.ok)throw new Error('server answered '+r.status);JOBS=await r.json()}
+  catch(e){JOBS=[];document.getElementById('nonemsg').textContent='Could not load jobs ('+e.message+'). Is the dashboard still running? Ask Claude: “restart the dashboard”.';
+  document.getElementById('none').style.display='block';return}
   try{VARIANTS=(await (await fetch('/api/variants')).json()).variants||[]}catch(e){VARIANTS=[]}
   document.querySelectorAll('.vcol').forEach(e=>e.style.display=VARIANTS.length?'':'none');
   const srcs=[...new Set(JOBS.map(j=>j.source))].sort(),s=document.getElementById('src');
@@ -102,6 +107,9 @@ function render(){
   rows.sort(cmp);saveUI();
   document.getElementById('count').textContent=`${rows.length} shown · ${JOBS.filter(j=>!j.hidden).length} total · ${JOBS.filter(j=>j.hidden).length} hidden`;
   document.getElementById('none').style.display=rows.length?'none':'block';
+  if(!rows.length){const vis=JOBS.filter(j=>!j.hidden).length;
+    document.getElementById('nonemsg').textContent=!JOBS.length?'No jobs yet — press “Find new jobs”.'
+      :`No jobs match the filters at the top (${vis} jobs saved, ${JOBS.length-vis} hidden by your settings).`}
   const b=document.getElementById('b');b.innerHTML='';
   for(const j of rows){
     const kw=(j.matched||[]).slice(0,5).join(', ');
